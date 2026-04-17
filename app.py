@@ -15,7 +15,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from components.ui_blocks import (
     render_ai_insights, render_judge_panel, render_news,
-    ACCENT, BORDER, TEXT, MUTED, BODY_TEXT, EMERALD, CRIMSON
+    ACCENT, BORDER, TEXT, MUTED, BODY_TEXT, EMERALD, CRIMSON,
+    EMERALD_RGB, CRIMSON_RGB, BORDER_RGB
 )
 from utils.data_agent import fetch_financial_metrics, fetch_trend_data, fetch_news, fetch_fmp, build_context_for_llm
 from utils.ai_agent import get_insights, get_judge_scores, run_fact_check_agent, resolve_ticker, MAX_FACT_CHECK_RETRIES, get_action_insight, _stream_ollama, robust_tag_parser
@@ -789,13 +790,13 @@ if st.session_state.page == "hero":
     fc1, fc2, fc3, fc4 = st.columns(4)
     features = [
         ("🔎", "#EFF6FF", "#2563EB", "Smart Ticker Resolution",
-         "Type any company name — AI resolves it to the correct stock ticker automatically."),
-        ("🛡️", "#ECFDF5", "#10B981", "Glass-Box Fact-Check",
-         "Every number is cross-verified against raw yFinance data. Zero hallucinations."),
-        ("📊", "#FFF7ED", "#F59E0B", "Quantitative Analysis",
-         "Revenue, margins, D/E ratios, ROE — all exact figures, never estimated."),
-        ("⚖️", "#FEF2F2", "#EF4444", "LLM-as-Judge Audit",
-         "Independent AI auditor scores every report on accuracy, clarity, and completeness."),
+         "Resolves natural language queries into verified global exchange tickers using a multi-stage validation engine."),
+        ("🛡️", "#ECFDF5", "#10B981", "Live Audit Feed",
+         "Experience 100% transparency with a live streaming audit trace that verifies numerical integrity before the report is finalized."),
+        ("📊", "#FFF7ED", "#F59E0B", "Financial Health Matrix",
+         "Deterministic extraction of Revenue, Margins, and Solvency metrics directly from yFinance—verified exactly, never estimated."),
+        ("⚖️", "#FEF2F2", "#EF4444", "Institutional Governance",
+         "A secondary 'Judge' agent scores every report against regulatory-grade criteria for accuracy, clarity, and grounding."),
     ]
     for col, (icon, bg, accent, title, desc) in zip([fc1, fc2, fc3, fc4], features):
         col.markdown(f"""
@@ -964,7 +965,8 @@ Then, you MUST provide the structured report inside <report_json> tags."""
                 # Extract partial trace for live view
                 trace = robust_tag_parser(full_response, "audit_trace")
                 if trace:
-                    reasoning_placeholder.code(trace, language="text")
+                    from utils.ai_agent import format_intelligence_steps
+                    reasoning_placeholder.markdown(format_intelligence_steps(trace), unsafe_allow_html=True)
         
         status.update(label="Synthesis Complete", state="complete", expanded=False)
 
@@ -978,8 +980,12 @@ Then, you MUST provide the structured report inside <report_json> tags."""
         
         fact_check_status = "PASS"
         if not st.session_state.turbo_mode:
-            st.write("Running final compliance check...")
+            st.write("🔍 Running compliance audit on generated claims...")
+            time.sleep(0.5)
+            st.write("📊 Cross-referencing numerical data with yFinance context...")
+            time.sleep(0.8)
             critique = run_fact_check_agent(json.dumps(insights_final), context)
+            st.write(f"⚖️ Audit Result: **{critique.get('status', 'PASSED')}**")
             fact_check_status = "PASS" if critique.get("status") == "PASS" else "FAIL"
         
         status.update(label="Verified Analyst Report Ready", state="complete")
@@ -1056,35 +1062,43 @@ Sector <div class="fc-badge">{sector}</div>
 
     # 1b. HERO INSIGHT BLOCK
     sig = (insights_final.get("signal") or (insights_final.get("executive_verdict", {}) or {}).get("signal") or "HOLD").upper()
-    sig_color = "#10B981" if sig == "BUY" else "#EF4444" if sig == "SELL" else "#F59E0B"
+    sig_color = EMERALD if sig == "BUY" else CRIMSON if sig == "SELL" else "#F59E0B"
+    pass_color = EMERALD if fact_check_status == 'PASS' else CRIMSON
+    
+    # Sanitize reasons
+    reasons_list = insights_final.get('_reasons', [])
+    if not reasons_list:
+        reasons_list = [insights_final.get('executive_summary', 'No further details available.')]
+    
+    reasons_html = "".join([f"<li style='margin:6px 0; color:#CBD5E1;'>{str(r).strip()}</li>" for r in reasons_list[:3]])
+
     st.markdown(f"""
-<div style="background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.08));
-            border: 1px solid rgba(16,185,129,0.2);
+<div style="background: linear-gradient(135deg, rgba({EMERALD_RGB}, 0.12), rgba(5, 150, 105, 0.08));
+            border: 1px solid rgba({EMERALD_RGB}, 0.2);
             border-radius: 14px;
-            padding: 18px 24px;
+            padding: 22px 24px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            margin: 10px 0 24px 0;
-            animation: fadeInUp 0.4s ease both;">
+            margin: 10px 0 24px 0;">
     <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px;">
-        <div>
-            <div style="color:{MUTED}; font-size:0.72rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:8px;">
+        <div style="flex:1;">
+            <div style="color:#94A3B8; font-size:0.72rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:8px;">
                 AI Analysis Snapshot
             </div>
             <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
                 <div style="font-size:1.5rem; font-weight:900; color:{sig_color}; letter-spacing:0.02em;">{sig}</div>
-                <div style="color:{TEXT}; font-weight:800; font-size:1rem;">Confidence: {int(insights_final.get("_confidence_pct", 75))}%</div>
+                <div style="color:#ffffff; font-weight:800; font-size:1rem;">Confidence: {int(insights_final.get("_confidence_pct", 75))}%</div>
             </div>
             <div style="margin-top:12px;">
-                <ul style="margin:0; padding-left:18px; color:{BODY_TEXT}; line-height:1.7; font-size:0.88rem;">
-                    {''.join([f"<li style='margin:6px 0;'>{r}</li>" for r in insights_final.get('_reasons', [])])}
+                <ul style="margin:0; padding-left:18px; line-height:1.7; font-size:0.88rem;">
+                    {reasons_html}
                 </ul>
             </div>
         </div>
         <div style="min-width:140px; text-align:right;">
-            <div style="color:{MUTED}; font-size:0.78rem; font-weight:700;">Verified Mode</div>
-            <div style="margin-top:8px; display:inline-flex; align-items:center; gap:10px; padding:6px 14px; border-radius:999px; border:1px solid {BORDER}; background:rgba(255,255,255,0.03);">
-                <span style="width:8px; height:8px; border-radius:50%; background:{'#10B981' if fact_check_status=='PASS' else '#EF4444'}; box-shadow: 0 0 8px {'#10B981' if fact_check_status=='PASS' else '#EF4444'};"></span>
-                <span style="color:{TEXT}; font-size:0.78rem; font-weight:800;">{fact_check_status}</span>
+            <div style="color:#94A3B8; font-size:0.78rem; font-weight:700;">Verified Mode</div>
+            <div style="margin-top:8px; display:inline-flex; align-items:center; gap:10px; padding:6px 14px; border-radius:999px; border:1px solid rgba({BORDER_RGB}, 0.1); background:rgba(255,255,255,0.03);">
+                <span style="width:8px; height:8px; border-radius:50%; background:{pass_color}; box-shadow: 0 0 8px {pass_color};"></span>
+                <span style="color:#ffffff; font-size:0.78rem; font-weight:800;">{fact_check_status}</span>
             </div>
         </div>
     </div>
@@ -1093,25 +1107,25 @@ Sector <div class="fc-badge">{sector}</div>
 
     # 2. Functional Action Grid
     st.markdown("""
-        <style>
-        .action-row .stButton > button {
-            background-color: var(--card);
-            color: var(--text);
-            border: 1px solid var(--border);
-            font-weight: 700;
-            border-radius: 8px;
-            padding: 8px 0px;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-        .action-row .stButton > button:hover {
-            border-color: var(--brandA);
-            color: var(--brandA);
-            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
-            transform: translateY(-2px);
-        }
-        </style>
-    """, unsafe_allow_html=True)
+<style>
+.action-row .stButton > button {
+    background-color: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-weight: 700;
+    border-radius: 8px;
+    padding: 8px 0px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.action-row .stButton > button:hover {
+    border-color: var(--brandA);
+    color: var(--brandA);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+    transform: translateY(-2px);
+}
+</style>
+""", unsafe_allow_html=True)
 
     st.markdown(f"<h4 style='color:{TEXT}; font-size:1.1rem; font-weight:800; margin-bottom:14px; text-transform:uppercase; letter-spacing:0.08em;'>Agent Intelligence Actions</h4>", unsafe_allow_html=True)
     
@@ -1165,20 +1179,20 @@ Sector <div class="fc-badge">{sector}</div>
         return f"+{val}%" if float(val) > 0 else f"{val}%"
         
     st.markdown(f"""
-    <div class="fc-perf-grid">
-        <div class="fc-perf-box"><div class="fc-perf-label">1 Month</div><div class="fc-perf-val {_val_cls(perf.get('1 Month', '-'))}">{_val_lbl(perf.get('1 Month', '-'))}</div></div>
-        <div class="fc-perf-box"><div class="fc-perf-label">6 Months</div><div class="fc-perf-val {_val_cls(perf.get('6 Months', '-'))}">{_val_lbl(perf.get('6 Months', '-'))}</div></div>
-        <div class="fc-perf-box"><div class="fc-perf-label">This Year</div><div class="fc-perf-val {_val_cls(perf.get('This Year', '-'))}">{_val_lbl(perf.get('This Year', '-'))}</div></div>
-        <div class="fc-perf-box"><div class="fc-perf-label">1 Year</div><div class="fc-perf-val {_val_cls(perf.get('1 Year', '-'))}">{_val_lbl(perf.get('1 Year', '-'))}</div></div>
-        <div class="fc-perf-box"><div class="fc-perf-label">3 Years</div><div class="fc-perf-val {_val_cls(perf.get('3 Years', '-'))}">{_val_lbl(perf.get('3 Years', '-'))}</div></div>
-        <div class="fc-perf-box dark"><div class="fc-perf-label">5 Years</div><div class="fc-perf-val fc-val-neutral">-</div></div>
-    </div>
-    <div class="fc-perf-grid-wide">
-        <div class="fc-perf-box"><div class="fc-perf-label">10 Years</div><div class="fc-perf-val fc-val-neutral">-</div></div>
-        <div class="fc-perf-box"><div class="fc-perf-label">20 Years</div><div class="fc-perf-val fc-val-neutral">-</div></div>
-        <div class="fc-perf-box"><div class="fc-perf-label">All history</div><div class="fc-perf-val fc-val-neutral">-</div></div>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="fc-perf-grid">
+    <div class="fc-perf-box"><div class="fc-perf-label">1 Month</div><div class="fc-perf-val {_val_cls(perf.get('1 Month', '-'))}">{_val_lbl(perf.get('1 Month', '-'))}</div></div>
+    <div class="fc-perf-box"><div class="fc-perf-label">6 Months</div><div class="fc-perf-val {_val_cls(perf.get('6 Months', '-'))}">{_val_lbl(perf.get('6 Months', '-'))}</div></div>
+    <div class="fc-perf-box"><div class="fc-perf-label">This Year</div><div class="fc-perf-val {_val_cls(perf.get('This Year', '-'))}">{_val_lbl(perf.get('This Year', '-'))}</div></div>
+    <div class="fc-perf-box"><div class="fc-perf-label">1 Year</div><div class="fc-perf-val {_val_cls(perf.get('1 Year', '-'))}">{_val_lbl(perf.get('1 Year', '-'))}</div></div>
+    <div class="fc-perf-box"><div class="fc-perf-label">3 Years</div><div class="fc-perf-val {_val_cls(perf.get('3 Years', '-'))}">{_val_lbl(perf.get('3 Years', '-'))}</div></div>
+    <div class="fc-perf-box dark"><div class="fc-perf-label">5 Years</div><div class="fc-perf-val fc-val-neutral">-</div></div>
+</div>
+<div class="fc-perf-grid-wide">
+    <div class="fc-perf-box"><div class="fc-perf-label">10 Years</div><div class="fc-perf-val fc-val-neutral">-</div></div>
+    <div class="fc-perf-box"><div class="fc-perf-label">20 Years</div><div class="fc-perf-val fc-val-neutral">-</div></div>
+    <div class="fc-perf-box"><div class="fc-perf-label">All history</div><div class="fc-perf-val fc-val-neutral">-</div></div>
+</div>
+""", unsafe_allow_html=True)
 
     # 5. Years Performance (go.Bar with strict coloring)
     st.markdown("""<div class="fc-section-header"><div class="fc-pill-dark">Years Performance</div></div>""", unsafe_allow_html=True)
@@ -1269,7 +1283,6 @@ elif st.session_state.page in ["how_it_works", "features", "ai_finance", "resear
 <div class="summary-section">
 <h1 class="summary-header">How Our <span style="color:var(--brandA)">Glass-Box</span> Works</h1>
 <p class="summary-paragraph">We've pioneered a four-stage verified research pipeline designed to eliminate AI hallucinations and provide institutional-grade signal.</p>
-
 <div class="summary-step">
 <div class="step-number">1</div>
 <div class="step-content">
@@ -1306,7 +1319,6 @@ elif st.session_state.page in ["how_it_works", "features", "ai_finance", "resear
 <div class="summary-section">
 <h1 class="summary-header">The Future of <span style="color:var(--brandB)">AI in Finance</span></h1>
 <p class="summary-paragraph">Your research shouldn't happen in a "Black Box." We believe in private, locally-hosted intelligence that prioritizes truth over creativity.</p>
-
 <div class="summary-step">
 <div class="step-content">
 <h5>100% Privacy via Local LLMs</h5>

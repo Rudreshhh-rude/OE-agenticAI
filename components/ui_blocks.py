@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import json
+import time
 
 # ═══════════════════════════════════════════════════════════════
 #  COMPONENT LIBRARY — Glass-Box Professional UI
@@ -9,9 +11,12 @@ import plotly.graph_objects as go
 # ── Color Constants (Institutional Dark Mode) ──
 EMERALD = "#10B981"
 CRIMSON = "#EF4444"
+EMERALD_RGB = "16, 185, 129"
+CRIMSON_RGB = "239, 68, 68"
 ACCENT  = "#10B981"       # Switched from Blue to Emerald
 CARD_BG = "#111827"
 BORDER  = "rgba(255,255,255,0.08)"
+BORDER_RGB = "255, 255, 255"
 MUTED   = "#94A3B8"
 TEXT    = "#F9FAFB"
 SUBTLE  = "#64748B"
@@ -274,11 +279,18 @@ def render_audit_trail(audit_text: str):
         return
         
     st.markdown(f"""
-<div style="background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 1.2rem; margin-bottom: 2rem;">
-    <div style="color:{EMERALD}; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.8rem; display:flex; align-items:center; gap:6px;">
-        <span style="font-size:1rem;">📋</span> AGENT INTELLIGENCE FEED (AUDIT TRACE)
+<div style="background: rgba(15, 23, 42, 0.4); 
+            border: 1px solid rgba(16, 185, 129, 0.2); 
+            border-radius: 12px; 
+            padding: 1.5rem; 
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+    <div style="color:{EMERALD}; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.12em; margin-bottom:1.2rem; display:flex; align-items:center; gap:8px;">
+        <span style="font-size:1.1rem;">🛡️</span> AGENT INTELLIGENCE TRACE
     </div>
-    <div style="color:{BODY_TEXT}; font-size:0.85rem; line-height:1.6; white-space: pre-wrap; font-family: 'JetBrains Mono', 'Fira Code', monospace;">{audit_text}</div>
+    <div style="color:{BODY_TEXT}; font-size:0.92rem; line-height:1.8; font-family: 'Inter', sans-serif;">
+        {audit_text}
+    </div>
 </div>
     """, unsafe_allow_html=True)
 
@@ -307,12 +319,13 @@ def render_ai_insights(insights: dict, fact_check_status: str = "PASS"):
         sig_color = "#F59E0B"
 
     # ── Header & Badge ──
+    badge_rgb = EMERALD_RGB if fact_check_status == "PASS" else CRIMSON_RGB
     badge_color = EMERALD if fact_check_status == "PASS" else CRIMSON
     badge_text = "✓ VERIFIED BY COMPLIANCE AGENT" if fact_check_status == "PASS" else "⚠ AUDIT LOG DISCREPANCY"
     
     st.markdown(f"""
 <div class="insight-panel" style="position:relative; border-top:2px solid {sig_color}; padding:2rem; margin-top:2rem; background:{CARD_BG}; border-radius:12px; border:1px solid {BORDER}; box-shadow: 0 10px 40px rgba(0,0,0,0.35);">
-    <span style="background:rgba({badge_color},0.15); color:{badge_color}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.75rem; float:right; margin-top:-0.5rem; border:1px solid rgba({badge_color},0.2);">{badge_text}</span>
+    <span style="background:rgba({badge_rgb},0.15); color:{badge_color}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.75rem; float:right; margin-top:-0.5rem; border:1px solid rgba({badge_rgb},0.2);">{badge_text}</span>
     <h3 style="margin:0 0 1.5rem 0; color:{TEXT}; font-size:1.15rem; font-weight:700;">EXECUTIVE SUMMARY</h3>
     
     <div style="background:rgba(15,23,42,0.4); border-left:4px solid {sig_color}; padding:1.2rem 1.4rem; border-radius:6px; margin-bottom:2rem; border:1px solid {BORDER};">
