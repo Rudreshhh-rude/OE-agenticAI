@@ -18,7 +18,7 @@ from components.ui_blocks import (
     ACCENT, BORDER, TEXT, MUTED, BODY_TEXT, EMERALD, CRIMSON
 )
 from utils.data_agent import fetch_financial_metrics, fetch_trend_data, fetch_news, fetch_fmp, build_context_for_llm
-from utils.ai_agent import get_insights, get_judge_scores, run_fact_check_agent, resolve_ticker, MAX_FACT_CHECK_RETRIES, get_action_insight
+from utils.ai_agent import get_insights, get_judge_scores, run_fact_check_agent, resolve_ticker, MAX_FACT_CHECK_RETRIES, get_action_insight, _stream_ollama, robust_tag_parser
 
 load_dotenv()
 
@@ -912,134 +912,80 @@ elif st.session_state.page == "analysis":
 </div>
 """, unsafe_allow_html=True)
 
-    # Glass-Box Execution Pipeline
-    # Resolving ticker
-    resolved_ticker = resolve_ticker(ticker_input)
-
-    if resolved_ticker is None:
-        placeholder_loading.error("Error: Entity not found on major public exchanges.")
-        st.stop()
-
-    ticker = resolved_ticker
-    terminal_logs.append(f"Successfully resolved entity to ticker: {ticker}")
-    with placeholder_terminal:
-        render_neo_terminal(terminal_logs)
-
-    placeholder_loading.markdown(f"""
-<div class="premium-loader">
-    <div class="loader-ring"></div>
-    <div class="loader-text">Analyzing {ticker}...</div>
-    <div class="loader-subtext">Scouring yFinance fundamentals & institutional data...</div>
-</div>
-""", unsafe_allow_html=True)
-    
-    # Run all data fetching in parallel to drastically cut latency
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_metrics = executor.submit(fetch_financial_metrics, ticker)
-        future_fmp = executor.submit(fetch_fmp, ticker)
-        future_trends = executor.submit(fetch_trend_data, ticker)
-        future_news = executor.submit(fetch_news, ticker)
+    # 1. High-Precision Workflow: Resolution & Context
+    with st.status("Engaging Research Agent...", expanded=True) as status:
+        st.write("Resolving Ticker Symbol...")
+        ticker = resolve_ticker(ticker_input)
+        if not ticker:
+            status.update(label="Ticker Resolution Failed", state="error")
+            st.error("Could not resolve entity.")
+            st.stop()
         
-        terminal_logs.append("Executing parallel data extraction across 4 threads...")
-        with placeholder_terminal: render_neo_terminal(terminal_logs)
-        
-        metrics = future_metrics.result()
-        fmp = future_fmp.result()
-        
-        terminal_logs.append("Fetching ticker fundamentals...")
-        with placeholder_terminal: render_neo_terminal(terminal_logs)
-        
-        trends = future_trends.result()
-        news = future_news.result()
-        
-        terminal_logs.append("Analyzing live news catalysts...")
-        with placeholder_terminal: render_neo_terminal(terminal_logs)
-
-    context = build_context_for_llm(ticker, metrics, trends, news, fmp)
-    
-    placeholder_loading.markdown(f"""
-<div class="premium-loader">
-    <div class="loader-ring"></div>
-    <div class="loader-text">Synthesizing Report...</div>
-    <div class="loader-subtext">AI Analyst is drafting your verified research report...</div>
-</div>
-""", unsafe_allow_html=True)
-
-    terminal_logs.append("Context compilation complete. Generating institutional-grade insights...")
-    with placeholder_terminal: render_neo_terminal(terminal_logs)
-    
-    insights_final = get_insights(context, ticker)
-    fact_check_status = "PASS"
-    
-    if not st.session_state.turbo_mode:
-        terminal_logs.append("Initiating Fact-Check Critique Agent (Audit Level: Strict)...")
-        with placeholder_terminal: render_neo_terminal(terminal_logs)
-        
-        critique = run_fact_check_agent(json.dumps(insights_final), context)
-        fact_check_status = "PASS" if critique.get("is_compliant", True) else "FAIL"
-        
-        if fact_check_status == "FAIL":
-            terminal_logs.append("Critique failed. Applying corrections to AI report...")
-            with placeholder_terminal: render_neo_terminal(terminal_logs)
-            insights_final = get_insights(context, ticker, feedback=critique.get("critique_summary", ""))
-    else:
-        terminal_logs.append("Turbo Mode active: User-selected audit bypass.")
-        with placeholder_terminal: render_neo_terminal(terminal_logs)
-
-    # Lightweight confidence for UI (1-5 -> %). Keeps structure; only enriches display.
-    conf_pct = 75
-    if not st.session_state.turbo_mode:
-        try:
-            terminal_logs.append("Scoring output quality via Judge Agent...")
-            with placeholder_terminal: render_neo_terminal(terminal_logs)
+        st.write(f"Aggregating Dense Context for {ticker}...")
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_metrics = executor.submit(fetch_financial_metrics, ticker)
+            future_fmp = executor.submit(fetch_fmp, ticker)
+            future_trends = executor.submit(fetch_trend_data, ticker)
+            future_news = executor.submit(fetch_news, ticker)
             
-            judge_scores = get_judge_scores(json.dumps(insights_final), context)
-            conf_1_5 = judge_scores.get("confidence", 3)
-            conf_map = {1: 55, 2: 65, 3: 75, 4: 86, 5: 92}
-            conf_pct = conf_map.get(int(conf_1_5), 75) if isinstance(conf_1_5, (int, float, str)) else 75
-        except Exception:
-            judge_scores = {}
-    else:
-        terminal_logs.append("Compliance scoring skipped.")
-        with placeholder_terminal: render_neo_terminal(terminal_logs)
+            metrics = future_metrics.result()
+            fmp = future_fmp.result()
+            trends = future_trends.result()
+            news = future_news.result()
+        
+        context = build_context_for_llm(ticker, metrics, trends, news, fmp)
+        status.update(label=f"Context Aggregated for {ticker}", state="complete", expanded=False)
 
-    # Analysis complete: Remove the big loading card and terminal
-    terminal_logs.append("Analysis Complete. Rendering Dashboard.")
-    with placeholder_terminal: render_neo_terminal(terminal_logs)
-    time.sleep(1.0) # Small beat for cooler feel
-    placeholder_loading.empty()
-    placeholder_terminal.empty()
+    # 2. Synthesis & Live Reasoning (The Glass-Box Vibe)
+    st.markdown("### 🖥️ AGENT INTELLIGENCE FEED")
+    reasoning_placeholder = st.empty()
+    full_response = ""
+    
+    with st.status("Synthesis Agent: Auditing & Drafting...", expanded=True) as status:
+        st.write("Executing internal compliance audit...")
+        
+        # We call the streaming helper directly here for the "vibe"
+        from utils.ai_agent import _primary_model_name
+        system_instruction = """### SYSTEM ROLE
+You are a High-Precision Financial Research Agent. Your goal is to transform raw data into a professional, zero-hallucination equity report. Use a "Glass-Box" policy: every step of your reasoning must be visible.
 
-    # Simple, beginner-friendly reasons (heuristic from available raw metrics)
-    reasons = []
-    try:
-        growth_str = str(metrics.get("Growth (%)", "")).replace("%", "").strip()
-        growth_val = float(growth_str) if growth_str not in ("", "N/A") else None
-    except Exception:
-        growth_val = None
-    try:
-        roe_str = str(fmp.get("Return on Equity (ROE)", "")).replace("%", "").strip()
-        roe_val = float(roe_str) if roe_str not in ("", "N/A") else None
-    except Exception:
-        roe_val = None
-    try:
-        de_str = str(fmp.get("Debt-to-Equity Ratio", "")).replace("x", "").strip()
-        de_val = float(de_str) if de_str not in ("", "N/A") else None
-    except Exception:
-        de_val = None
+### THE COMPLIANCE PROTOCOL
+First, you MUST complete the audit trace inside <audit_trace> tags.
+Then, you MUST provide the structured report inside <report_json> tags."""
 
-    if growth_val is not None:
-        reasons.append("Revenue is growing, which often supports future earnings.")
-    if roe_val is not None:
-        reasons.append("The company earns strong returns on shareholder money, which is a positive sign.")
-    if de_val is not None:
-        reasons.append("Debt looks manageable relative to equity, which can reduce financial risk.")
-    if not reasons:
-        reasons = ["Key numbers are mixed in the available data, so the signal is more cautious."]
+        user_prompt = f"Generate research for {ticker}.\nCONTEXT:\n{context}"
+        
+        stream = _stream_ollama(user_prompt, system_instruction)
+        
+        if stream:
+            for chunk in stream:
+                content = chunk['message']['content']
+                full_response += content
+                # Extract partial trace for live view
+                trace = robust_tag_parser(full_response, "audit_trace")
+                if trace:
+                    reasoning_placeholder.code(trace, language="text")
+        
+        status.update(label="Synthesis Complete", state="complete", expanded=False)
 
-    # Attach UI-only fields (keeps existing structure intact)
-    insights_final["_confidence_pct"] = conf_pct
-    insights_final["_reasons"] = reasons[:3]
+    # 3. Finalization (Judge & Fact-Check)
+    with st.status("Finalizing Verification...", expanded=False) as status:
+        # Robust Parse of the stream
+        report_str = robust_tag_parser(full_response, "report_json")
+        from utils.ai_agent import _safe_json_loads
+        insights_final = _safe_json_loads(report_str)
+        insights_final["audit_trail"] = robust_tag_parser(full_response, "audit_trace")
+        
+        fact_check_status = "PASS"
+        if not st.session_state.turbo_mode:
+            st.write("Running final compliance check...")
+            critique = run_fact_check_agent(json.dumps(insights_final), context)
+            fact_check_status = "PASS" if critique.get("status") == "PASS" else "FAIL"
+        
+        status.update(label="Verified Analyst Report Ready", state="complete")
+
+    # Attach UI-only fields for High-Precision Rendering
+    insights_final["_fact_check_status"] = fact_check_status
 
     company_name = metrics.get("_company_name", ticker)
     sector = metrics.get("_sector", "N/A Sector")

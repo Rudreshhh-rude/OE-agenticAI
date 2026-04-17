@@ -268,75 +268,111 @@ def render_charts(trend_data: dict):
         st.plotly_chart(fig, use_container_width=True)
 
 
+def render_audit_trail(audit_text: str):
+    """Renders the human-readable Audit Trace summary."""
+    if not audit_text:
+        return
+        
+    st.markdown(f"""
+<div style="background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 1.2rem; margin-bottom: 2rem;">
+    <div style="color:{EMERALD}; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.8rem; display:flex; align-items:center; gap:6px;">
+        <span style="font-size:1rem;">📋</span> AGENT INTELLIGENCE FEED (AUDIT TRACE)
+    </div>
+    <div style="color:{BODY_TEXT}; font-size:0.85rem; line-height:1.6; white-space: pre-wrap; font-family: 'JetBrains Mono', 'Fira Code', monospace;">{audit_text}</div>
+</div>
+    """, unsafe_allow_html=True)
+
+
 def render_ai_insights(insights: dict, fact_check_status: str = "PASS"):
-    """Renders the Glass-Box research report panel with prominent verification badge."""
+    """Renders the High-Precision research report with Matrix and Landscape."""
     if "error" in insights:
         st.error(f"AI Generation Error: {insights['error']}")
         return
 
-    # Optional UI-only enhancements (computed in app.py)
-    confidence_pct = insights.get("_confidence_pct")
-    reasons = insights.get("_reasons") if isinstance(insights.get("_reasons"), list) else []
-
-    # ── Extract signal from nested or flat structure ──
-    if "executive_verdict" in insights and isinstance(insights["executive_verdict"], dict):
-        signal = insights["executive_verdict"].get("signal", "HOLD").upper()
-        summary = insights["executive_verdict"].get("justification", "")
-    else:
-        signal = insights.get("signal", "HOLD").upper()
-        summary = insights.get("summary", "")
-
-    fundamental_health = insights.get("fundamental_health", "No fundamental health analysis provided.")
-    historical_trends = insights.get("historical_trends", "No historical trends analysis provided.")
-    catalysts_headwinds = insights.get("catalysts_headwinds", "No catalysts or headwinds provided.")
+    # Extract High-Precision data
+    summary = insights.get("executive_summary", insights.get("summary", ""))
+    matrix = insights.get("financial_health_matrix", {})
+    landscape = insights.get("competitive_landscape", [])
+    signal = str(insights.get("signal", "HOLD")).upper()
+    audit_trail = insights.get("audit_trail", "")
 
     if signal == "BUY":
         signal_class = "signal-buy"
+        sig_color = EMERALD
     elif signal == "SELL":
         signal_class = "signal-sell"
+        sig_color = CRIMSON
     else:
         signal_class = "signal-hold"
+        sig_color = "#F59E0B"
 
-    safe_summary = str(summary).replace('\n', ' ')
-    safe_fund_health = str(fundamental_health).replace('\n', '<br/>')
-    safe_hist_trends = str(historical_trends).replace('\n', '<br/>')
-    safe_cat_head = str(catalysts_headwinds).replace('\n', '<br/>')
-
-    if fact_check_status == "PASS":
-        badge_html = f'<span style="background:rgba(22,163,74,0.15); color:{EMERALD}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.75rem; float:right; margin-top:-0.5rem; border:1px solid rgba(22,163,74,0.2);">✓ VERIFIED BY CRITIQUE AGENT</span>'
-    else:
-        badge_html = f'<span style="background:rgba(239,68,68,0.15); color:{CRIMSON}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.75rem; float:right; margin-top:-0.5rem; border:1px solid rgba(239,68,68,0.2);">⚠ CRITIQUE FAILED</span>'
-
-    conf_line = f' <span style="color:{MUTED}; font-weight:700;">(Confidence: {int(confidence_pct)}%)</span>' if isinstance(confidence_pct, (int, float)) else ""
-    reasons_html = ""
-    if reasons:
-        bullets = "".join([f"<li style='margin:6px 0; color:{BODY_TEXT};'>{r}</li>" for r in reasons[:3]])
-        # IMPORTANT: no leading indentation, otherwise Streamlit Markdown may render this as a code block
-        reasons_html = (
-            f'<div style="margin-top: 12px;">'
-            f'<div style="color:{MUTED}; font-size:0.7rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:6px;">Why this signal</div>'
-            f'<ul style="margin: 0 0 0 18px; padding: 0;">{bullets}</ul>'
-            f"</div>"
-        )
-
-    st.markdown(f"""<div class="insight-panel" style="position:relative; border-top:2px solid {ACCENT}; padding:2rem; margin-top:2rem; background:{CARD_BG}; border-radius:12px; border:1px solid {BORDER}; box-shadow: 0 10px 40px rgba(0,0,0,0.35);">
-    {badge_html}
-    <h3 style="margin:0 0 1.5rem 0; color:{TEXT}; font-size:1.15rem; font-weight:700; padding-top:0.3rem;">EXECUTIVE VERDICT</h3>
-    <div style="background:rgba(15,23,42,0.4); border-left:4px solid {ACCENT}; padding:1.2rem 1.4rem; border-radius:6px; margin-bottom:2rem; border:1px solid {BORDER};">
-        <p style="color:{BODY_TEXT}; font-size:0.92rem; line-height:1.7; margin:0;">{safe_summary}</p>
+    # ── Header & Badge ──
+    badge_color = EMERALD if fact_check_status == "PASS" else CRIMSON
+    badge_text = "✓ VERIFIED BY COMPLIANCE AGENT" if fact_check_status == "PASS" else "⚠ AUDIT LOG DISCREPANCY"
+    
+    st.markdown(f"""
+<div class="insight-panel" style="position:relative; border-top:2px solid {sig_color}; padding:2rem; margin-top:2rem; background:{CARD_BG}; border-radius:12px; border:1px solid {BORDER}; box-shadow: 0 10px 40px rgba(0,0,0,0.35);">
+    <span style="background:rgba({badge_color},0.15); color:{badge_color}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.75rem; float:right; margin-top:-0.5rem; border:1px solid rgba({badge_color},0.2);">{badge_text}</span>
+    <h3 style="margin:0 0 1.5rem 0; color:{TEXT}; font-size:1.15rem; font-weight:700;">EXECUTIVE SUMMARY</h3>
+    
+    <div style="background:rgba(15,23,42,0.4); border-left:4px solid {sig_color}; padding:1.2rem 1.4rem; border-radius:6px; margin-bottom:2rem; border:1px solid {BORDER};">
+        <p style="color:{BODY_TEXT}; font-size:0.95rem; line-height:1.7; margin:0;">{summary}</p>
         <div style="margin-top: 1.2rem; border-top:1px solid {BORDER}; padding-top:0.8rem;">
-            <span style="font-size:0.7rem; font-weight:700; color:{MUTED}; text-transform:uppercase; margin-right:8px;">Signal:</span>
-            <span class="signal-badge {signal_class}" style="padding:0.4rem 1.2rem; font-size:0.8rem; font-weight:700; border-radius:30px;">{signal}</span>{conf_line}
+            <span style="font-size:0.7rem; font-weight:700; color:{MUTED}; text-transform:uppercase; margin-right:8px;">Verdict:</span>
+            <span class="signal-badge {signal_class}" style="padding:0.4rem 1.2rem; font-size:0.8rem; font-weight:700; border-radius:30px;">{signal}</span>
         </div>
-        {reasons_html}
     </div>
-    <h4 style="color:{MUTED}; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.1em; margin-bottom:0.7rem; padding-bottom:0.4rem; border-bottom:1px solid #E2E8F0; margin-top:1.5rem;">FUNDAMENTAL HEALTH</h4>
-    <p style="color:{BODY_TEXT}; font-size:0.92rem; line-height:1.7; margin-bottom:2rem;">{safe_fund_health}</p>
-    <h4 style="color:{MUTED}; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.1em; margin-bottom:0.7rem; padding-bottom:0.4rem; border-bottom:1px solid #E2E8F0;">HISTORICAL TRENDS</h4>
-    <p style="color:{BODY_TEXT}; font-size:0.92rem; line-height:1.7; margin-bottom:2rem;">{safe_hist_trends}</p>
-    <h4 style="color:{MUTED}; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.1em; margin-bottom:0.7rem; padding-bottom:0.4rem; border-bottom:1px solid #E2E8F0;">CATALYSTS & HEADWINDS</h4>
-    <p style="color:{BODY_TEXT}; font-size:0.92rem; line-height:1.7; margin-bottom:1rem;">{safe_cat_head}</p>
-</div>""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+    # ── Financial Health Matrix ──
+    if matrix:
+        st.markdown(f'<h4 style="color:{MUTED}; text-transform:uppercase; font-size:0.75rem; letter-spacing:0.1em; margin-bottom:1rem;">FINANCIAL HEALTH MATRIX</h4>', unsafe_allow_html=True)
+        m_cols = st.columns(4)
+        labels = ["Revenue", "Margins", "Solvency", "Efficiency"]
+        keys = ["revenue", "margins", "solvency", "efficiency"]
+        
+        for col, label, key in zip(m_cols, labels, keys):
+            item = matrix.get(key, {"val": "N/A", "status": "Unverified"})
+            color = EMERALD if item.get("status") == "Verified" else MUTED
+            col.markdown(f"""
+<div style="background:rgba(255,255,255,0.02); padding:1rem; border-radius:8px; border:1px solid {BORDER}; text-align:center;">
+    <div style="color:{MUTED}; font-size:0.65rem; font-weight:700; text-transform:uppercase;">{label}</div>
+    <div style="color:{TEXT}; font-size:1.1rem; font-weight:800; margin:4px 0;">{item.get('val')}</div>
+    <div style="color:{color}; font-size:0.55rem; font-weight:700;">● {item.get('status').upper()}</div>
+</div>
+            """, unsafe_allow_html=True)
+
+    # ── Competitive Landscape ──
+    if landscape:
+        st.markdown(f'<h4 style="color:{MUTED}; text-transform:uppercase; font-size:0.75rem; letter-spacing:0.1em; margin:2rem 0 1rem 0;">COMPETITIVE LANDSCAPE</h4>', unsafe_allow_html=True)
+        for peer in landscape:
+            rel_color = EMERALD if peer.get("relationship") == "Direct Rival" else "#38BDF8"
+            st.markdown(f"""
+<div style="display:flex; justify-content:space-between; align-items:center; padding:0.8rem 1.2rem; background:rgba(15,23,42,0.3); border-radius:8px; border:1px solid {BORDER}; margin-bottom:0.6rem;">
+    <div>
+        <span style="color:{TEXT}; font-weight:700; font-size:0.9rem;">{peer.get('company')}</span>
+        <span style="color:{rel_color}; font-size:0.65rem; font-weight:700; text-transform:uppercase; margin-left:8px; border:1px solid {rel_color}; padding:2px 6px; border-radius:4px;">{peer.get('relationship')}</span>
+    </div>
+    <div style="color:{BODY_TEXT}; font-size:0.8rem; font-style:italic;">{peer.get('metric_compare')}</div>
+</div>
+            """, unsafe_allow_html=True)
+
+    # ── Audit Trail ──
+    if audit_trail:
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        render_audit_trail(audit_trail)
+
+    # ── Copy Utility ──
+    st.markdown("---")
+    res_col1, res_col2 = st.columns([1, 1])
+    with res_col1:
+        if st.button("📋 Copy JSON Analysis", use_container_width=True):
+            st.session_state.clipboard = json.dumps(insights, indent=2)
+            st.success("JSON copied to context! (Use Ctrl+V)")
+    with res_col2:
+        st.markdown(f'<div style="text-align:right; color:{MUTED}; font-size:0.7rem; font-weight:600;">REPORT ID: {float(time.time()):.0f}</div>', unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_judge_panel(scores: dict):

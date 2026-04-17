@@ -209,6 +209,41 @@ def _safe_json_loads(text: str) -> dict:
     return extracted if extracted else {"error": "JSON parse failed after all repair attempts", "raw": text[:100]}
 
 
+def robust_tag_parser(text, tag):
+    """
+    Greedy parser that extracts content between <tag> and </tag>.
+    Handles missing closing tags and nested content by searching for the start tag 
+    and matching until the end tag or end of string.
+    """
+    # Use non-greedy match but ensure we find the tag even if malformed/missing closing
+    pattern = rf"<{tag}>(.*?)(?:</{tag}>|$)"
+    match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+
+def _stream_ollama(contents, system_instruction=None):
+    """Generates a stream of responses from Ollama for live terminal feedback."""
+    model_id = _primary_model_name()
+    messages = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    messages.append({"role": "user", "content": contents})
+
+    try:
+        stream = ollama.chat(
+            model=model_id,
+            messages=messages,
+            stream=True,
+            options={"temperature": 0.15, "num_predict": 900}
+        )
+        return stream
+    except Exception as e:
+        print(f"[OLLAMA STREAM ERROR] {e}")
+        return None
+
+
 def resolve_ticker(query: str) -> str | None:
     """
     Resolves natural language company names to stock tickers.
@@ -391,70 +426,85 @@ def get_insights(context: str, ticker: str, feedback: str = None) -> dict:
     print(f"\n[STEP 3: DRAFT GENERATION] Sending context to local LLM ({_primary_model_name()})...")
     start = time.time()
 
-    system_instruction = """You are a quantitative financial analyst writing for FIRST-TIME INVESTORS.
-You MUST ONLY use the exact numerical values provided in the CONTEXT below. Do not invent, estimate, or round numbers. Format ratios properly (e.g., Debt-to-Equity as 1.02x, not 102x).
+    # Move from JSON constraint to Tag-Based Freedom
+    system_instruction = """### SYSTEM ROLE
+You are a High-Precision Financial Research Agent. Your goal is to transform raw data into a professional, zero-hallucination equity report. Use a "Glass-Box" policy: every step of your reasoning must be visible.
 
-STRICT RULES -- VIOLATION IS UNACCEPTABLE:
-1. Every single number you cite MUST appear EXACTLY in the CONTEXT below.
-2. Format Debt-to-Equity as a ratio (e.g., "1.87x"), NOT as a raw number like "187".
-3. Do NOT use weak hedging language. Banned: "may", "might", "could", "considering", "stable", "good", "promising", "decent".
-4. The fundamental_health section MUST be written in prose (a paragraph), NOT bullet points, and must use exact numbers.
-5. Use comparative framing: compare ROE to sector average (15-20%), compare margins to industry norms.
-6. Reference 52-week high/low data to frame valuation context."""
-    
-    beginner_style = """
-BEGINNER-FRIENDLY STYLE (MANDATORY):
-- Short sentences (max ~18 words each).
-- Avoid jargon. If you must use a term, explain it in plain English.
-- After each key metric, add a plain-language implication (good/bad/neutral) in the same sentence.
-"""
-    system_instruction = system_instruction + beginner_style
+### THE COMPLIANCE PROTOCOL
+First, you MUST complete the audit trace inside <audit_trace> tags.
+Then, you MUST provide the structured report inside <report_json> tags.
 
-    json_schema = """{
-  "executive_verdict": {
-    "signal": "BUY",
-    "justification": "Two sentences max with exact numbers."
-  },
-  "fundamental_health": "Strictly prose paragraph analyzing financial health using exact numbers from context (NO BULLET POINTS).",
-  "historical_trends": "Analysis of price and revenue trends based on the context data.",
-  "catalysts_headwinds": "Specific upcoming catalysts and current headwinds, citing the provided news/context."
-}"""
+<audit_trace>
+1. TICKER VERIFICATION: (e.g. RELIANCE.NS)
+2. RAW DATA EXTRACTION: List key metrics (Revenue, P/E, D/E, Margin).
+3. SOURCE CROSS-CHECK: Identify any conflicting data.
+4. HALLUCINATION CHECK: State if any requested data is MISSING.
+</audit_trace>
 
-    user_prompt = f"""Analyze the following financial data for {ticker} and produce a research report.
-The "signal" field MUST be exactly one of: BUY, HOLD, or SELL.
+### REPORT CONSTRAINTS
+- NO EXTERNAL KNOWLEDGE.
+- VERIFIED BADGE CRITERIA: Sections must match yFinance exactly.
+- PEER BENCHMARKING: Primary (Industry list) + Secondary (Disruptor from news)."""
 
-OUTPUT FORMAT -- Respond with ONLY valid JSON matching this structure:
-{json_schema}
+    user_prompt = f"""Generate a high-precision research report for {ticker} using ONLY the following context.
 
-CONTEXT (USE ONLY THESE NUMBERS -- DO NOT FABRICATE):
+STRUCTURE:
+1. <audit_trace> (Internal Diagnostic reasoning)
+2. <report_json> (JSON report following schema below)
+
+SCHEMA FOR <report_json>:
+{{
+  "executive_summary": "3 sentences max.",
+  "financial_health_matrix": {{
+    "revenue": {{"val": "$X.XB", "status": "Verified"}},
+    "margins": {{"val": "XX%", "status": "Verified"}},
+    "solvency": {{"val": "X.XXx", "status": "Verified"}},
+    "efficiency": {{"val": "XX%", "status": "Verified"}}
+  }},
+  "competitive_landscape": [
+    {{"company": "...", "relationship": "...", "metric_compare": "..."}}
+  ],
+  "signal": "BUY|HOLD|SELL"
+}}
+
+CONTEXT:
 {context}"""
 
     if feedback:
-        user_prompt += f"\n\nCRITIQUE FAILED. The following errors were found in your previous draft. Fix them using ONLY exact numbers from the CONTEXT:\n{feedback}"
+        user_prompt += f"\n\nCRITIQUE FEEDBACK (Fix these errors): {feedback}"
 
+    # Use streaming for live UI feedback
+    full_response = ""
+    # Note: st.cache_data and generators don't play well together. 
+    # For SOTA "Vibe", we will handle streaming in app.py directly.
+    # This function will act as the "Legacy/Fallback" full-text fetcher.
+    
     try:
         response = _call_ollama(
             contents=user_prompt,
             config={
                 "system_instruction": system_instruction,
-                "response_mime_type": "application/json",
                 "temperature": 0.15,
+                "num_predict": 1200
             },
         )
-
-        raw_text = response.text.strip()
-        result = _safe_json_loads(raw_text)
-        elapsed = time.time() - start
-        print(f"[STEP 3: DRAFT GENERATION] Draft received ({len(raw_text)} chars) in {elapsed:.1f}s")
-
-        # -- Backward-compat: extract signal from nested structure --
-        if "executive_verdict" in result and isinstance(result["executive_verdict"], dict):
-            result["signal"] = result["executive_verdict"].get("signal", "HOLD")
-            result["summary"] = result["executive_verdict"].get("justification", "")
-        elif "signal" not in result:
-            result["signal"] = "HOLD"
-
+        full_response = response.text.strip()
+        
+        # Robust Parse
+        trace = robust_tag_parser(full_response, "audit_trace")
+        report_str = robust_tag_parser(full_response, "report_json")
+        result = _safe_json_loads(report_str)
+        
+        # Attach the trace for the UI
+        result["audit_trail"] = trace if trace else "Audit trace extraction failed."
+        result["executive_summary"] = result.get("executive_summary", "Summary not generated.")
+        
+        if "signal" not in result: result["signal"] = "HOLD"
+        
         return result
+    except Exception as e:
+        print(f"[STEP 3: DRAFT GENERATION] ERROR: {e}")
+        return {"error": str(e)}
     except Exception as e:
         print(f"[STEP 3: DRAFT GENERATION] ERROR: {e}")
         return {"error": str(e)}

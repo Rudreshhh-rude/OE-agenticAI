@@ -214,6 +214,7 @@ def fetch_financial_metrics(ticker: str):
             "_52_week_high": fiftyTwoWeekHigh,
             "_52_week_low": fiftyTwoWeekLow,
             "_longBusinessSummary": truncated_summary,
+            "_industry": info.get("industry", "N/A Industry"),
             "_logo_url": logo_url,
             "_ceo": ceo,
             "_cfo": cfo,
@@ -333,4 +334,9 @@ def build_context_for_llm(ticker: str, metrics: dict, trends: dict, news: list, 
     for item in news:
         context += f"- {item.get('title')}: {item.get('content')}\n"
         
+    context += f"\n=== BENCHMARKING GOALS ===\n"
+    context += f"Target Sector: {metrics.get('_sector')}\n"
+    context += f"Target Industry: {metrics.get('_industry')}\n"
+    context += f"Goal: Compare {ticker} against its primary sector peers and identify any emerging disruptors mentioned in the news above.\n"
+    
     return context
