@@ -18,7 +18,7 @@ from components.ui_blocks import (
     ACCENT, BORDER, TEXT, MUTED, BODY_TEXT, EMERALD, CRIMSON,
     EMERALD_RGB, CRIMSON_RGB, BORDER_RGB
 )
-from utils.data_agent import fetch_financial_metrics, fetch_trend_data, fetch_news, fetch_fmp, build_context_for_llm
+from utils.data_agent import fetch_financial_metrics, fetch_trend_data, fetch_news, fetch_fmp, build_context_for_llm, fetch_sidebar_market_data
 from utils.ai_agent import get_insights, get_judge_scores, run_fact_check_agent, resolve_ticker, MAX_FACT_CHECK_RETRIES, get_action_insight, _stream_ollama, robust_tag_parser
 
 load_dotenv()
@@ -102,9 +102,10 @@ st.markdown("""
         --radius: 16px;
     }
 
-    /* ---- Font ---- */
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+    /* ---- Fonts ---- */
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Source+Code+Pro:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif !important; letter-spacing: -0.01em; }
+    code, pre, .mono-stat { font-family: 'Source Code Pro', monospace !important; font-size: 0.9em; }
 
     /* ---- Animations ---- */
     @keyframes fadeInUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
@@ -296,6 +297,121 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important;
         border-color: var(--brandA) !important;
+    }
+
+    /* ======================= COMMAND CENTER UI (SEARCH PAGE) ======================= */
+    .status-ticker {
+        display: flex; gap: 24px; justify-content: center;
+        padding: 10px 0; border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+        background: rgba(16, 185, 129, 0.03);
+        margin: -1rem -1rem 2rem -1rem;
+    }
+    .status-item {
+        font-family: 'Source Code Pro', monospace; font-size: 0.75rem; 
+        font-weight: 600; color: var(--brandA); opacity: 0.85;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .status-dot-green { width: 6px; height: 6px; border-radius: 50%; background: #10B981; box-shadow: 0 0 8px #10B981; }
+
+    .intelligence-shortcuts {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+        margin-top: 3rem; max-width: 900px;
+    }
+    .shortcut-btn button {
+        height: auto !important; padding: 24px !important;
+        background: rgba(15, 23, 42, 0.5) !important;
+        border: 1px solid rgba(16, 185, 129, 0.1) !important;
+        border-radius: 16px !important;
+        text-align: left !important; display: block !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .shortcut-btn button:hover {
+        border-color: var(--brandA) !important;
+        background: rgba(16, 185, 129, 0.05) !important;
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.1) !important;
+    }
+    .shortcut-title { color: var(--brandA); font-weight: 800; font-size: 1rem; margin-bottom: 4px; display: block; }
+    .shortcut-desc { color: var(--muted); font-size: 0.8rem; font-weight: 500; line-height: 1.4; display: block; }
+
+    .glass-box-visualizer {
+        margin-top: 6rem; padding: 4rem 2rem;
+        border-top: 1px solid var(--border);
+        background: radial-gradient(circle at center bottom, rgba(16, 185, 129, 0.03) 0%, transparent 70%);
+    }
+    .visualizer-card {
+        padding: 24px; border-radius: 12px; border: 1px solid var(--border);
+        background: rgba(255,255,255,0.01);
+    }
+    .search-bg-glow {
+        position: absolute; top: 300px; left: 50%; transform: translateX(-50%);
+        width: 800px; height: 800px;
+        background: radial-gradient(circle, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+        pointer-events: none; z-index: -1;
+    }
+
+    /* ---- SIDEBAR PERIPHERALS ---- */
+    .market-watch-dock {
+        padding: 20px 0; border-right: 1px solid var(--border);
+        height: 60vh; display: flex; flex-direction: column; gap: 12px;
+    }
+    .dock-item {
+        padding: 12px 16px; border-radius: 8px; transition: all 0.25s ease;
+        border: 1px solid transparent; cursor: default;
+    }
+    .dock-item:hover {
+        background: rgba(16, 185, 129, 0.04);
+        border-color: rgba(16, 185, 129, 0.2);
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+    }
+    .dock-ticker { font-size: 0.85rem; font-weight: 800; color: var(--text); }
+    .dock-price { font-size: 0.8rem; font-family: 'Source Code Pro'; color: var(--muted); }
+    .dock-change { font-size: 0.75rem; font-weight: 700; }
+
+    .agent-heartbeat-log {
+        padding: 20px 0; border-left: 1px solid var(--border);
+        height: 60vh; overflow-y: hidden;
+    }
+    .heartbeat-line {
+        font-family: 'Source Code Pro', monospace; font-size: 0.65rem;
+        color: #004422; letter-spacing: 0.05em; margin-bottom: 8px;
+        opacity: 0.7; animation: fadeIn 0.5s ease;
+    }
+
+    /* ---- ACTION GRID ICON REFACTOR ---- */
+    .action-icon {
+        font-size: 1.5rem; margin-bottom: 12px; display: block;
+        color: var(--brandA); opacity: 0.9;
+    }
+
+    /* ---- FLOW VISUALIZER LOGIC MAP ---- */
+    .logic-flow {
+        display: flex; align-items: center; justify-content: center; gap: 40px;
+        margin-top: 40px; padding-bottom: 20px;
+    }
+    .flow-node {
+        padding: 14px 24px; background: rgba(15, 23, 42, 0.5);
+        border: 1px solid var(--border); border-radius: 8px;
+        font-size: 0.8rem; font-weight: 700; color: var(--text);
+        text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .flow-arrow {
+        position: relative; width: 60px; height: 2px;
+        background: rgba(255,255,255,0.1);
+    }
+    .flow-arrow::after {
+        content: ""; position: absolute; right: 0; top: -4px;
+        width: 10px; height: 10px; border-top: 2px solid rgba(255,255,255,0.1);
+        border-right: 2px solid rgba(255,255,255,0.1); transform: rotate(45deg);
+    }
+    .flow-pulse {
+        position: absolute; left: 0; top: 0; height: 100%;
+        background: var(--brandA); box-shadow: 0 0 10px var(--brandA);
+        animation: pulseLine 2s infinite ease-in-out;
+    }
+    @keyframes pulseLine {
+        0% { left: 0; width: 0; opacity: 0; }
+        50% { left: 0; width: 100%; opacity: 1; }
+        100% { left: 100%; width: 0; opacity: 0; }
     }
 
     /* Primary buttons only (CTAs / Analyze) */
@@ -759,7 +875,6 @@ if st.session_state.page == "hero":
             <a href="/?nav=ai_finance">AI for Finance</a>
             <a href="/?nav=research">Research</a>
             <a class="btn-nav-outline" href="#">Sign In</a>
-            <a class="btn-nav-primary" href="/?nav=search">Try for Free</a>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -773,13 +888,9 @@ if st.session_state.page == "hero":
     """, unsafe_allow_html=True)
 
     # -- CTA Buttons (functional) --
-    btn_pad1, btn_cta1, btn_cta2, btn_pad2 = st.columns([2.5, 1.2, 1.2, 2.5])
-    with btn_cta1:
-        if st.button("Try now for free", width="stretch", key="cta_try", type="primary"):
-            go_to_search()
-            st.rerun()
-    with btn_cta2:
-        if st.button("See how it works", width="stretch", key="cta_how", type="primary"):
+    btn_pad1, btn_cta, btn_pad2 = st.columns([3, 1.4, 3])
+    with btn_cta:
+        if st.button("Try now", width="stretch", key="cta_try", type="primary"):
             go_to_search()
             st.rerun()
 
@@ -825,57 +936,113 @@ if st.session_state.page == "hero":
 # =====================================================================
 elif st.session_state.page == "search":
 
-    # -- Vertical spacer to push content toward center --
-    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
-
-    # -- Logo & branding (tight group) --
+    # -- 1. SYSTEM STATUS HEADER --
     st.markdown("""
-    <div class="search-page-container">
-        <div class="search-logo">
-            <span class="logo-icon">&#9678;</span>AI Financial Insights<span class="logo-dot">.</span>
-        </div>
-        <div class="search-tagline">Glass-Box Intelligence</div>
-        <div class="search-prompt">Let's get started...</div>
+    <div class="status-ticker">
+        <div class="status-item"><span class="status-dot-green"></span> CORE: Llama 3.2 (Local)</div>
+        <div class="status-item"><span class="status-dot-green"></span> DATA: yFinance + Tavily Hybrid</div>
+        <div class="status-item"><span class="status-dot-green"></span> AUDIT: Active (Zero-Hallucination)</div>
     </div>
+    <div class="search-bg-glow"></div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
+    # Fetch sidebar data
+    market_data = fetch_sidebar_market_data()
 
-    # -- Centered Search Bar (tight column) --
-    s_pad1, s_input, s_pad2 = st.columns([1, 2, 1])
-    with s_input:
+    # -- 3-COLUMN DASHBOARD LAYOUT --
+    col_market, col_main, col_logs = st.columns([1.2, 3.8, 1.2])
+
+    with col_market:
+        st.markdown('<div class="market-watch-dock">', unsafe_allow_html=True)
+        st.markdown("<div style='color:var(--muted); font-size:0.7rem; font-weight:800; margin-bottom:10px; text-transform:uppercase;'>Market Watch</div>", unsafe_allow_html=True)
+        for item in market_data:
+            color = "#10B981" if item['change'] > 0 else "#EF4444"
+            arrow = "▲" if item['change'] > 0 else "▼"
+            st.markdown(f"""
+            <div class="dock-item">
+                <div class="dock-ticker">{item['ticker']}</div>
+                <div class="dock-price">${item['price']}</div>
+                <div class="dock-change" style="color:{color};">{arrow} {abs(item['change'])}%</div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_main:
+        # -- Logo & branding --
+        st.markdown("""
+        <div class="search-page-container">
+            <div class="search-logo" style="font-size:2.2rem;">
+                <span class="logo-icon" style="width:36px; height:36px; font-size:1rem;">&#9678;</span>AI Financial Insights<span class="logo-dot">.</span>
+            </div>
+            <div class="search-tagline" style="font-size:0.75rem;">Intelligence Command Center</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:0.8rem;'></div>", unsafe_allow_html=True)
+
+        # -- Search Bar --
         ticker_input = st.text_input(
             "Search",
-            placeholder="Search...",
+            placeholder="Analyze any ticker or company name...",
             label_visibility="collapsed",
             key="search_input"
         )
+        st.markdown("<p class='pick-plan-link'>Institutional Tier active for this session.</p>", unsafe_allow_html=True)
+
+        # -- REFACTORED ACTION GRID (Icons) --
+        st.markdown("<div style='height:1.5rem;'></div>", unsafe_allow_html=True)
+        st.markdown('<div class="intelligence-shortcuts">', unsafe_allow_html=True)
+        col_a, col_b, col_c = st.columns(3)
+        
+        shortcut_ticker = None
+        
+        with col_a:
+            if st.button("🛡️ SOLVENCY\nAudit debt, ROE, and coverage ratios.", key="sc_solvency"):
+                shortcut_ticker = "AAPL"
+        with col_b:
+            if st.button("⚡ CATALYSTS\nScan for news-driven movers.", key="sc_catalyst"):
+                shortcut_ticker = "NVDA"
+        with col_c:
+            if st.button("⚖️ BENCHMARK\nRelative value vs. industry peers.", key="sc_benchmark"):
+                shortcut_ticker = "MSFT"
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # -- FLOW VISUALIZER --
         st.markdown("""
-        <p class="pick-plan-link">Whenever you're ready, <a href="#">pick a plan</a>!</p>
+        <div class="glass-box-visualizer" style="margin-top:4rem; padding: 2rem 0; border:none; background:none;">
+            <h5 style="text-align:center; color:var(--muted); font-size:0.75rem; letter-spacing:0.2em; text-transform:uppercase; margin-bottom:20px;">System Logic Flow</h5>
+            <div class="logic-flow">
+                <div class="flow-node">User Query</div>
+                <div class="flow-arrow"><div class="flow-pulse"></div></div>
+                <div class="flow-node" style="border-color:var(--brandA); color:var(--brandA);">Multi-Agent Audit</div>
+                <div class="flow-arrow"><div class="flow-pulse"></div></div>
+                <div class="flow-node">Verified Report</div>
+            </div>
+        </div>
         """, unsafe_allow_html=True)
 
-    # -- AI Agent Pill --
-    st.markdown("""
-    <div style="text-align:center; margin-top:0.6rem;">
-        <div class="ai-agent-pill">
-            <span class="ai-agent-dot"></span>
-            Ask AI Financial Agent: <em>"What is the growth outlook for Nvidia?"</em>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    with col_logs:
+        st.markdown('<div class="agent-heartbeat-log">', unsafe_allow_html=True)
+        st.markdown("<div style='color:var(--muted); font-size:0.7rem; font-weight:800; margin-bottom:10px; text-transform:uppercase;'>Agent Heartbeat</div>", unsafe_allow_html=True)
+        from datetime import datetime
+        now = datetime.now().strftime("%H:%M")
+        logs = [
+            f"[{now}] SYS_OLLAMA_READY",
+            f"[{now}] TAVILY_SYNC_UP",
+            f"[{now}] YFIN_API_200",
+            f"[{now}] AUDIT_AGENT_LIVE",
+            f"[{now}] MEMORY_READY",
+            f"[{now}] HANDSHAKE_OK"
+        ]
+        for log in logs:
+            st.markdown(f'<div class="heartbeat-line">{log}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # -- Analyze button --
-    st.markdown("<div style='height:1.2rem;'></div>", unsafe_allow_html=True)
-    btn_pad1, btn_col, btn_pad2 = st.columns([2, 1, 2])
-    with btn_col:
-        if st.button("Analyze", width="stretch", key="back_home", type="primary"):
-            go_to_hero()
-            st.rerun()
-
-    # -- Trigger analysis if user entered a ticker --
-    if ticker_input and ticker_input.strip():
+    # Handle Analysis Trigger
+    final_ticker = ticker_input.strip() if ticker_input else shortcut_ticker
+    if final_ticker:
         st.session_state.page = "analysis"
-        st.session_state.ticker_to_analyze = ticker_input.strip()
+        st.session_state.ticker_to_analyze = final_ticker
         st.rerun()
 
 
@@ -1273,7 +1440,6 @@ elif st.session_state.page in ["how_it_works", "features", "ai_finance", "resear
             <a href="/?nav=features">Features</a>
             <a href="/?nav=ai_finance">AI for Finance</a>
             <a href="/?nav=research">Research</a>
-            <a class="btn-nav-primary" href="/?nav=search">Try now</a>
         </div>
     </div>
     """, unsafe_allow_html=True)

@@ -340,3 +340,32 @@ def build_context_for_llm(ticker: str, metrics: dict, trends: dict, news: list, 
     context += f"Goal: Compare {ticker} against its primary sector peers and identify any emerging disruptors mentioned in the news above.\n"
     
     return context
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_sidebar_market_data():
+    """Fetches high-level data for a few marquee tickers for the side dock."""
+    tickers = ["NVDA", "AAPL", "TSLA", "RELIANCE.NS", "BTC-USD"]
+    results = []
+    
+    for t in tickers:
+        try:
+            stock = yf.Ticker(t)
+            # Use fast_info if available, or basic history
+            hist = stock.history(period="2d")
+            if len(hist) >= 2:
+                current_price = hist['Close'].iloc[-1]
+                prev_price = hist['Close'].iloc[-2]
+                change_pct = ((current_price - prev_price) / prev_price) * 100
+            else:
+                current_price = stock.info.get('regularMarketPrice') or 0.0
+                change_pct = stock.info.get('regularMarketChangePercent') or 0.0
+                
+            results.append({
+                "ticker": t,
+                "price": round(current_price, 2),
+                "change": round(change_pct, 2)
+            })
+        except Exception as e:
+            print(f"[SIDEBAR DATA] Error fetching {t}: {e}")
+            results.append({"ticker": t, "price": "Offline", "change": 0.0})
+            
+    return results

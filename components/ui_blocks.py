@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import json
 import time
+from string import Template
 
 # ═══════════════════════════════════════════════════════════════
 #  COMPONENT LIBRARY — Glass-Box Professional UI
@@ -21,6 +22,47 @@ MUTED   = "#94A3B8"
 TEXT    = "#F9FAFB"
 SUBTLE  = "#64748B"
 BODY_TEXT = "#E2E8F0"
+
+# We use $variable syntax instead of {variable} to avoid CSS conflicts
+EXEC_SUMMARY_TEMPLATE = Template("""
+<div style="background:rgba(15,23,42,0.4); border-left:4px solid $border_color; 
+            padding:1.2rem 1.4rem; border-radius:6px; margin-bottom:2rem; 
+            border:1px solid rgba(255,255,255,0.08); animation: fadeInUp 0.5s ease-out;">
+    <p style="color:#E2E8F0; font-size:0.95rem; line-height:1.7; margin:0;">$summary_text</p>
+    <div style="margin-top: 1.2rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:0.8rem;">
+        <span style="font-size:0.7rem; font-weight:700; color:#94A3B8; text-transform:uppercase; margin-right:8px;">Verdict:</span>
+        <span style="background:$badge_bg; color:$badge_text; padding:0.4rem 1.2rem; 
+                     font-size:0.8rem; font-weight:700; border-radius:30px;">$verdict</span>
+    </div>
+</div>
+""")
+
+
+def render_executive_summary(summary_text, verdict):
+    # Default fallback if LLM skips the summary
+    if not summary_text or len(summary_text) < 5:
+        summary_text = "Analysis complete. Awaiting final compliance audit of numerical data..."
+
+    # Define the color-coded "Signaling" for the Verdict
+    config = {
+        "BUY":  {"color": "#00ff88", "bg": "rgba(0, 255, 136, 0.15)", "border": "#00ff88"},
+        "HOLD": {"color": "#F59E0B", "bg": "rgba(245, 158, 11, 0.15)", "border": "#F59E0B"},
+        "SELL": {"color": "#EF4444", "bg": "rgba(239, 68, 68, 0.15)", "border": "#EF4444"}
+    }
+    
+    # Get styles for the current verdict (default to HOLD if not found)
+    style = config.get(verdict.upper(), config["HOLD"])
+
+    # Substitute variables into the Template
+    html_output = EXEC_SUMMARY_TEMPLATE.substitute(
+        summary_text=summary_text,
+        verdict=verdict.upper(),
+        border_color=style["border"],
+        badge_bg=style["bg"],
+        badge_text=style["color"]
+    )
+
+    st.markdown(html_output, unsafe_allow_html=True)
 
 
 def render_sidebar_brand():
@@ -328,14 +370,9 @@ def render_ai_insights(insights: dict, fact_check_status: str = "PASS"):
     <span style="background:rgba({badge_rgb},0.15); color:{badge_color}; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:0.75rem; float:right; margin-top:-0.5rem; border:1px solid rgba({badge_rgb},0.2);">{badge_text}</span>
     <h3 style="margin:0 0 1.5rem 0; color:{TEXT}; font-size:1.15rem; font-weight:700;">EXECUTIVE SUMMARY</h3>
     
-    <div style="background:rgba(15,23,42,0.4); border-left:4px solid {sig_color}; padding:1.2rem 1.4rem; border-radius:6px; margin-bottom:2rem; border:1px solid {BORDER};">
-        <p style="color:{BODY_TEXT}; font-size:0.95rem; line-height:1.7; margin:0;">{summary}</p>
-        <div style="margin-top: 1.2rem; border-top:1px solid {BORDER}; padding-top:0.8rem;">
-            <span style="font-size:0.7rem; font-weight:700; color:{MUTED}; text-transform:uppercase; margin-right:8px;">Verdict:</span>
-            <span class="signal-badge {signal_class}" style="padding:0.4rem 1.2rem; font-size:0.8rem; font-weight:700; border-radius:30px;">{signal}</span>
-        </div>
-    </div>
     """, unsafe_allow_html=True)
+    
+    render_executive_summary(summary, signal)
 
     # ── Financial Health Matrix ──
     if matrix:
