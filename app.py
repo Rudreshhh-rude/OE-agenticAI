@@ -49,8 +49,10 @@ st.set_page_config(
 )
 
 # ── Session State Defaults ──
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 if "page" not in st.session_state:
-    st.session_state.page = "hero"
+    st.session_state.page = "login" if not st.session_state.authenticated else "hero"
 if "ticker_to_analyze" not in st.session_state:
     st.session_state.ticker_to_analyze = None
 if "turbo_mode" not in st.session_state:
@@ -80,6 +82,95 @@ def render_neo_terminal(lines):
         terminal_html += f'<div class="terminal-line"><span class="terminal-prefix">></span> <span>{line}</span></div>'
     terminal_html += '<div class="terminal-line"><span class="terminal-prefix">></span> <span class="terminal-cursor"></span></div></div>'
     st.markdown(terminal_html, unsafe_allow_html=True)
+
+# ── User Management Helpers (Supabase) ──
+def _load_users():
+    """Fallback list for local dev/admin access."""
+    return {"admin": "premium2026"}
+
+def _check_user_auth(username, password):
+    """Verifies credentials against Supabase users table."""
+    if not supabase:
+        # Fallback to local admin if Supabase is not configured
+        return _load_users().get(username) == password
+    
+    try:
+        res = supabase.table("users").select("*").eq("username", username).eq("password", password).execute()
+        return len(res.data) > 0 or (username == "admin" and password == "premium2026")
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
+        return username == "admin" and password == "premium2026"
+
+def _save_user(username, password):
+    """Persists a new user to the Supabase users table."""
+    if not supabase:
+        return False
+    try:
+        data = {"username": username, "password": password}
+        supabase.table("users").insert(data).execute()
+        return True
+    except Exception as e:
+        st.error(f"Sign-up error: {e}")
+        return False
+
+def render_login_page():
+    """Renders a high-aesthetic, center-aligned SaaS login gateway with Sign Up."""
+    st.markdown("""
+    <div style="text-align: center; padding-top: 5rem;">
+        <div class="search-logo" style="font-size: 3rem; margin-bottom: 0.5rem;">
+            <span class="logo-icon" style="width:50px; height:50px; font-size:1.4rem;">&#9678;</span>
+            AI Financial Insights<span class="logo-dot">.</span>
+        </div>
+        <div class="search-tagline" style="margin-bottom: 2rem;">Intelligence Command Center &mdash; SaaS Gateway</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _, l_col, _ = st.columns([1.2, 1, 1.2])
+    with l_col:
+        st.markdown('<div class="feature-card" style="text-align: left; padding: 2.5rem;">', unsafe_allow_html=True)
+        
+        tab_login, tab_signup = st.tabs(["🔒 Secure Login", "✨ New Account"])
+        
+        with tab_login:
+            st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
+            u_login = st.text_input("Username", key="login_user")
+            p_login = st.text_input("Security Key", type="password", key="login_pwd")
+            
+            if st.button("Initialize Terminal", type="primary", use_container_width=True):
+                if _check_user_auth(u_login, p_login):
+                    st.session_state.authenticated = True
+                    st.session_state.page = "hero"
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials. Please try again.")
+            
+            st.markdown('<p style="font-size:0.7rem; color:var(--muted); text-align:center; margin-top:10px;">Demo: admin | premium2026</p>', unsafe_allow_html=True)
+
+        with tab_signup:
+            st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
+            u_new = st.text_input("Choose Username", key="new_user")
+            p_new = st.text_input("Set Security Key", type="password", key="new_pwd")
+            p_confirm = st.text_input("Confirm Key", type="password", key="confirm_pwd")
+            
+            if st.button("Create SaaS Account", type="primary", use_container_width=True):
+                if not u_new or not p_new:
+                    st.warning("Please fill in all fields.")
+                elif p_new != p_confirm:
+                    st.error("Keys do not match.")
+                else:
+                    if _save_user(u_new, p_new):
+                        st.success("Account initialized! Logging in...")
+                        time.sleep(1)
+                        st.session_state.authenticated = True
+                        st.session_state.page = "hero"
+                        st.rerun()
+                    else:
+                        st.error("System storage error or username already exists.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('<p style="text-align:center; color:var(--muted); font-size:0.75rem; margin-top:2rem;">© 2026 AI Financial Insights. All Rights Reserved.</p>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="search-bg-glow" style="top: 100px;"></div>', unsafe_allow_html=True)
 
 
 # =====================================================================
@@ -471,7 +562,6 @@ st.markdown("""
     /* ======================= DIALOG MODAL STYLING (DARK, HIGH CONTRAST) ======================= */
     div[data-testid="stDialog"] {
         border-radius: 16px !important;
-        overflow: hidden;
     }
     div[data-testid="stDialog"] > div {
         background: linear-gradient(135deg, #050505 0%, #0F0F11 100%) !important;
@@ -799,7 +889,19 @@ with st.sidebar:
         <div style="color: var(--text); font-size: 0.85rem; font-weight: 600; margin-top: 4px;">Llama 3.2 (3B)</div>
         <div style="color: var(--muted); font-size: 0.7rem; margin-top: 2px;">Optimized for speed & accuracy</div>
     </div>
+    <div style="margin-top: 20px;">
+        <button onclick="window.location.reload();" style="width:100%; height:38px; background:rgba(239,68,68,0.1); color:#EF4444; border:1px solid rgba(239,68,68,0.2); border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">
+            LOGOUT SESSION
+        </button>
+    </div>
     """, unsafe_allow_html=True)
+    
+    # Since standard HTML buttons in markdown don't trigger st.experimental_rerun easily, 
+    # we use a native streamlit button for the logout logic below.
+    if st.button("Logout Access", type="secondary", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.page = "login"
+        st.rerun()
 
 
 # =====================================================================
@@ -851,6 +953,13 @@ def open_action_modal(action_name, ticker, context_data):
     </div>
     """, unsafe_allow_html=True)
 
+
+# =====================================================================
+#  SaaS ROUTING & AUTH GATE
+# =====================================================================
+if not st.session_state.authenticated:
+    render_login_page()
+    st.stop() # Prevent any further rendering until logged in
 
 # =====================================================================
 #  PAGE 1: HERO LANDING

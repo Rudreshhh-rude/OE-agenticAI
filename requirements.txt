@@ -3,5 +3,6 @@ ollama
 yfinance
 tavily-python
 python-dotenv
-
+groq
+supabase
 plotly

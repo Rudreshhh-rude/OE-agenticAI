@@ -7,35 +7,34 @@ import re
 import time
 import sys
 from dotenv import load_dotenv
+from groq import Groq
 
 # =====================================================================
-#  AI AGENT MODULE -- Glass-Box Architecture (Ollama Backend)
+#  AI AGENT MODULE -- Glass-Box Architecture (Groq/Ollama Backend)
 # =====================================================================
 
 load_dotenv()
 
+# ── API Clients ──
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_CLIENT = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
 # --- Windows-safe UTF-8 console output ---
-# Streamlit on Windows can run with a cp1252 console encoding, which will crash on emojis
-# used in action labels (e.g., "❓ What's happening?"). Force UTF-8 and replace any
-# unencodable characters instead of raising.
 try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
-    # If the environment doesn't allow reconfigure, we still want the app to run.
     pass
 
 # -- Ollama Models --
-# We auto-detect installed models to avoid 404 "model not found" latency.
-# You can override with env var OLLAMA_MODELS="gemma3:4b,llama3.1:latest"
 DEFAULT_MODEL_PREFERENCE = ["llama3.2:3b", "gemma3:4b", "llama3.1:latest", "llama3.1"]
 
 MAX_FACT_CHECK_RETRIES = 3
 MAX_API_RETRIES = 3
 
-# Brand name used across prompts/UI copy (no "Gemini" anywhere)
+# Brand name used across prompts/UI copy
 BRAND_NAME = "AI Financial Insights"
 
 class LLMResponse:
@@ -54,7 +53,6 @@ def _get_available_ollama_models() -> list[str]:
         _AVAILABLE_MODELS_CACHE = [m.strip() for m in override.split(",") if m.strip()]
         return _AVAILABLE_MODELS_CACHE
 
-    # Try to discover installed models via ollama python client.
     try:
         listing = ollama.list()
         models = listing.get("models", []) if isinstance(listing, dict) else []
@@ -69,7 +67,6 @@ def _get_available_ollama_models() -> list[str]:
     except Exception:
         pass
 
-    # Fallback: Prefer models we know the user has if discovery fails.
     _AVAILABLE_MODELS_CACHE = ["llama3.2:3b", "gemma3:1b", "llama3.1:latest", "llama3.1"]
     return _AVAILABLE_MODELS_CACHE
 
@@ -78,12 +75,10 @@ def _build_model_try_list() -> list[str]:
     installed_set = {m.lower() for m in installed}
     ordered: list[str] = []
 
-    # Preference order first (only if installed)
     for pref in DEFAULT_MODEL_PREFERENCE:
         if pref.lower() in installed_set:
             ordered.append(pref)
 
-    # Then any remaining installed models
     for m in installed:
         if m.lower() not in {x.lower() for x in ordered}:
             ordered.append(m)
@@ -97,6 +92,28 @@ def _primary_model_name() -> str:
         return lst[0] if lst else "ollama"
     except Exception:
         return "ollama"
+
+def _call_groq(contents: str, config: dict = None) -> object:
+    """Helper to call Groq API with Llama 3.3 70B for high-speed reasoning."""
+    if not GROQ_CLIENT:
+        raise Exception("Groq API Key missing.")
+    
+    cfg = config or {}
+    system_prompt = cfg.get("system_instruction", "You are a professional financial analyst.")
+    
+    response = GROQ_CLIENT.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": contents}
+        ],
+        temperature=cfg.get("temperature", 0.1),
+        max_tokens=cfg.get("num_predict", 1024),
+        response_format={"type": "json_object"} if cfg.get("response_mime_type") == "application/json" else None,
+        top_p=cfg.get("top_p", 0.9),
+    )
+    
+    return LLMResponse(response.choices[0].message.content)
 
 def _call_ollama(contents, config=None, system_instruction=None):
     """Resilient Ollama wrapper with retry + model fallback."""
@@ -161,7 +178,12 @@ def _safe_json_loads(text: str) -> dict:
 
     text = text.strip()
     
-    # 0. Strip Markdown code blocks if present (common in models like Llama 3)
+    # 0. Strip conversational preambles or Markdown artifacts
+    # Some smaller models (3B) put text BEFORE the JSON block even when asked not to.
+    if "{" in text:
+        text = text[text.find("{"):]
+    
+    # Strip Markdown code blocks if present (common in models like Llama 3)
     # This handles ```json { ... } ``` or just ``` { ... } ```
     text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'\s*```$', '', text, flags=re.MULTILINE)
@@ -216,7 +238,11 @@ def _safe_json_loads(text: str) -> dict:
     if "status" not in extracted and ("passed" in text.lower() or "verified" in text.lower()):
         extracted["status"] = "PASS"
 
-    return extracted if extracted else {"error": "JSON parse failed after all repair attempts", "raw": text[:100]}
+    # Ensure we return a valid dict with the required keys if it's mostly empty
+    if not extracted and text:
+        return {"error": "JSON parse failed. Model returned non-JSON text.", "raw": text[:150]}
+
+    return extracted if extracted else {"error": "JSON parse failed: Empty response", "raw": ""}
 
 
 def robust_tag_parser(text, tag):
@@ -532,12 +558,13 @@ CONTEXT:
     # This function will act as the "Legacy/Fallback" full-text fetcher.
     
     try:
-        response = _call_ollama(
+        call_fn = _call_groq if GROQ_CLIENT else _call_ollama
+        response = call_fn(
             contents=user_prompt,
             config={
                 "system_instruction": system_instruction,
                 "temperature": 0.15,
-                "num_predict": 1200
+                "num_predict": 1800, # Increased for deep reports
             },
         )
         full_response = response.text.strip()
@@ -557,9 +584,6 @@ CONTEXT:
     except Exception as e:
         print(f"[STEP 3: DRAFT GENERATION] ERROR: {e}")
         return {"error": str(e)}
-    except Exception as e:
-        print(f"[STEP 3: DRAFT GENERATION] ERROR: {e}")
-        return {"error": str(e)}
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -575,11 +599,13 @@ def run_fact_check_agent(draft_report: str, raw_data_context: str) -> dict:
     system_instruction = "You are a strict Financial Compliance Officer. Analyze and return ONLY valid JSON."
 
     prompt = f"""AUDIT PROTOCOL:
-1. Verify EVERY numerical claim ($ figures, %, ratios) in the Draft against the Raw Data.
-2. If any value deviates by >1%, return FAIL.
-3. Check for specific metrics: Revenue, Profit, D/E, ROE, Margins.
+1. Identify every numerical claim ($ figures, %, multiples) in the Draft.
+2. Cross-reference them against the Raw Data provided below. 
+3. If a number exists in the Raw Data but is expressed differently (e.g. 1.2B vs 1.20 Billion), this is a PASS.
+4. If a number is completely invented or deviates by >2% from Source, return FAIL.
+5. If the Draft says a metric is 'Not available' and it truly is missing from Source, this is a PASS.
 
-Return ONLY:
+Return ONLY a JSON object:
 {{"status": "PASS", "feedback": "All claims verified."}}
 OR:
 {{"status": "FAIL", "feedback": "[Briefly explain discrepancy]"}}
@@ -588,13 +614,14 @@ RAW DATA: {raw_data_context}
 DRAFT REPORT: {draft_report}"""
 
     try:
-        response = _call_ollama(
+        call_fn = _call_groq if GROQ_CLIENT else _call_ollama
+        response = call_fn(
             contents=prompt,
             config={
                 "system_instruction": system_instruction,
                 "response_mime_type": "application/json",
                 "temperature": 0.05,
-                "num_predict": 150, # Keep it tight
+                "num_predict": 512, 
             },
         )
 
@@ -636,13 +663,14 @@ REPORT TO GRADE:
 {insights_json}"""
 
     try:
-        response = _call_ollama(
+        call_fn = _call_groq if GROQ_CLIENT else _call_ollama
+        response = call_fn(
             contents=prompt,
             config={
                 "system_instruction": system_instruction,
                 "response_mime_type": "application/json",
                 "temperature": 0.0,
-                "num_predict": 220,
+                "num_predict": 450,
             },
         )
 
@@ -988,19 +1016,10 @@ def get_action_insight(action_name: str, ticker: str, context_data: str) -> str:
         user_prompt = user_prompt[:8000] + "\n\n[Context truncated for speed]"
 
     try:
-        last_feedback = None
-        for attempt in range(1, 2):  # strict+fast: generate then audit; at most 1 regeneration
-            tuned_prompt = user_prompt
-            if last_feedback:
-                tuned_prompt = (
-                    tuned_prompt
-                    + "\n\nCRITIQUE FAILED — you MUST fix these issues by removing unsupported claims and replacing them with 'Not available in provided data.':\n"
-                    + last_feedback
-                )
-
-            response = _call_ollama(
-                contents=tuned_prompt,
-                config={
+        call_fn = _call_groq if GROQ_CLIENT else _call_ollama
+        response = call_fn(
+            contents=tuned_prompt,
+            config={
                     "system_instruction": system_instruction,
                     "temperature": 0.15,
                     "num_predict": 280,
