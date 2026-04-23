@@ -133,12 +133,11 @@ def render_login_page():
 
     _, l_col, _ = st.columns([1.2, 1, 1.2])
     with l_col:
-        st.markdown('<div class="feature-card" style="text-align: left; padding: 2.5rem;">', unsafe_allow_html=True)
-        
+        st.markdown(f'<div style="text-align:center; margin-bottom:1.5rem; color:{MUTED}; font-size:0.75rem; letter-spacing:0.15em; font-weight:700; text-transform:uppercase;">Authentication Layer</div>', unsafe_allow_html=True)
         tab_login, tab_signup = st.tabs(["🔒 Secure Login", "✨ New Account"])
         
         with tab_login:
-            st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
+            st.markdown('<div style="height: 0.5rem;"></div>', unsafe_allow_html=True)
             u_login = st.text_input("Username", key="login_user")
             p_login = st.text_input("Security Key", type="password", key="login_pwd")
             
@@ -173,7 +172,7 @@ def render_login_page():
                     else:
                         st.error("System storage error or username already exists.")
         
-        st.markdown('</div>', unsafe_allow_html=True)
+
         st.markdown('<p style="text-align:center; color:var(--muted); font-size:0.75rem; margin-top:2rem;">© 2026 Finsighter. All Rights Reserved.</p>', unsafe_allow_html=True)
     
     st.markdown('<div class="search-bg-glow" style="top: 100px;"></div>', unsafe_allow_html=True)
