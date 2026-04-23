@@ -102,7 +102,7 @@ def _call_groq(contents: str, config: dict = None) -> object:
     system_prompt = cfg.get("system_instruction", "You are a professional financial analyst.")
     
     response = GROQ_CLIENT.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="mixtral-8x7b-32768",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": contents}
@@ -300,7 +300,7 @@ def _stream_groq(contents, system_instruction=None):
 
     try:
         stream = GROQ_CLIENT.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="mixtral-8x7b-32768",
             messages=messages,
             temperature=0.15,
             max_tokens=1500,
