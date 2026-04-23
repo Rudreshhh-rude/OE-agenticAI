@@ -32,7 +32,7 @@ supabase: Client = create_client(SB_URL, SB_KEY) if SB_URL and SB_KEY else None
 # =====================================================================
 #  MASTER THEME & UI TOKENS
 # =====================================================================
-BRAND_NAME = "AI Financial Insights"
+BRAND_NAME = "Finsighter"
 ACCENT     = "#10B981"  # Emerald Green (Financial Growth)
 TEXT       = "#F8FAFC"
 MUTED      = "#94A3B8"
@@ -44,7 +44,7 @@ BRAND_B    = "#059669"
 GLOW_SHADOW = "0 0 20px rgba(16, 185, 129, 0.2)"
 
 # =====================================================================
-#  AI Financial Insights  |  Glass-Box Architecture
+#  Finsighter  |  Glass-Box Architecture
 # =====================================================================
 
 st.set_page_config(
@@ -125,7 +125,7 @@ def render_login_page():
     <div style="text-align: center; padding-top: 5rem;">
         <div class="search-logo" style="font-size: 3rem; margin-bottom: 0.5rem;">
             <span class="logo-icon" style="width:50px; height:50px; font-size:1.4rem;">&#9678;</span>
-            AI Financial Insights<span class="logo-dot">.</span>
+            Finsighter<span class="logo-dot">.</span>
         </div>
         <div class="search-tagline" style="margin-bottom: 2rem;">Intelligence Command Center &mdash; SaaS Gateway</div>
     </div>
@@ -174,7 +174,7 @@ def render_login_page():
                         st.error("System storage error or username already exists.")
         
         st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('<p style="text-align:center; color:var(--muted); font-size:0.75rem; margin-top:2rem;">© 2026 AI Financial Insights. All Rights Reserved.</p>', unsafe_allow_html=True)
+        st.markdown('<p style="text-align:center; color:var(--muted); font-size:0.75rem; margin-top:2rem;">© 2026 Finsighter. All Rights Reserved.</p>', unsafe_allow_html=True)
     
     st.markdown('<div class="search-bg-glow" style="top: 100px;"></div>', unsafe_allow_html=True)
 
@@ -983,7 +983,7 @@ if st.session_state.page == "hero":
     # -- Navbar --
     st.markdown("""
     <div class="navbar">
-        <div class="navbar-brand"><a href="/?nav=hero" style="color:inherit; text-decoration:none;">AI Financial Insights</a></div>
+        <div class="navbar-brand"><a href="/?nav=hero" style="color:inherit; text-decoration:none;">Finsighter</a></div>
         <div class="navbar-links">
             <a href="/?nav=how_it_works">How It Works</a>
             <a href="/?nav=features">Features</a>
@@ -1087,7 +1087,7 @@ elif st.session_state.page == "search":
         st.markdown("""
         <div class="search-page-container">
             <div class="search-logo" style="font-size:2.2rem;">
-                <span class="logo-icon" style="width:36px; height:36px; font-size:1rem;">&#9678;</span>AI Financial Insights<span class="logo-dot">.</span>
+                <span class="logo-icon" style="width:36px; height:36px; font-size:1rem;">&#9678;</span>Finsighter<span class="logo-dot">.</span>
             </div>
             <div class="search-tagline" style="font-size:0.75rem;">Intelligence Command Center</div>
         </div>
@@ -1269,6 +1269,19 @@ Then, you MUST provide the structured report inside <report_json> tags."""
             critique = run_fact_check_agent(json.dumps(insights_final), context)
             st.write(f"⚖️ Audit Result: **{critique.get('status', 'PASSED')}**")
             fact_check_status = "PASS" if critique.get("status") == "PASS" else "FAIL"
+            
+            # Step 4: Final Grading (LLM-as-Judge)
+            st.write("📈 Independent Judge is grading report accuracy...")
+            judge_results = get_judge_scores(json.dumps(insights_final), context)
+            
+            # Calculate Confidence % (Average of 1-5 scores)
+            avg_score = (
+                judge_results.get("accuracy", 3) + 
+                judge_results.get("completeness", 3) + 
+                judge_results.get("clarity", 4) + 
+                judge_results.get("confidence", 3)
+            ) / 20.0 * 100.0 # Better math
+            insights_final["_confidence_pct"] = int(avg_score)
         
         status.update(label="Verified Analyst Report Ready", state="complete")
 
@@ -1338,7 +1351,7 @@ Sector <div class="fc-badge">{sector}</div>
         <div class="fc-tab" style="color:{MUTED};">Fundamentals</div>
         <div class="fc-tab" style="color:{MUTED};">News</div>
     </div>
-    <div class="fc-ai-btn" style="cursor:pointer; background:rgba(16,185,129,0.1); color:{ACCENT}; border:1px solid rgba(16,185,129,0.2);" onclick="window.scrollTo(0, document.body.scrollHeight);">🤖 Forecaster AI AGENT</div>
+    <div class="fc-ai-btn" style="cursor:pointer; background:rgba(16,185,129,0.1); color:{ACCENT}; border:1px solid rgba(16,185,129,0.2);" onclick="window.scrollTo(0, document.body.scrollHeight);">🤖 Finsighter</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1549,7 +1562,7 @@ elif st.session_state.page in ["how_it_works", "features", "ai_finance", "resear
     # Reuse Navbar for consistency
     st.markdown("""
     <div class="navbar">
-        <div class="navbar-brand"><a href="/?nav=hero" style="color:inherit; text-decoration:none;">AI Financial Insights</a></div>
+        <div class="navbar-brand"><a href="/?nav=hero" style="color:inherit; text-decoration:none;">Finsighter</a></div>
         <div class="navbar-links">
             <a href="/?nav=how_it_works">How It Works</a>
             <a href="/?nav=features">Features</a>

@@ -213,7 +213,7 @@ def fetch_financial_metrics(ticker: str):
             "_price_change_pct": round(price_change_pct, 2),
             "_52_week_high": fiftyTwoWeekHigh,
             "_52_week_low": fiftyTwoWeekLow,
-            "_longBusinessSummary": truncated_summary,
+            "_description": truncated_summary,
             "_industry": info.get("industry", "N/A Industry"),
             "_logo_url": logo_url,
             "_ceo": ceo,
