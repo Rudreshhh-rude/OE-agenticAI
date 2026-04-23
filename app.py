@@ -9,6 +9,9 @@ import hashlib
 import concurrent.futures
 import plotly.graph_objects as go
 import yfinance as yf
+from supabase import create_client, Client
+
+load_dotenv()
 
 # Add the project root to sys.path so components and utils can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -21,7 +24,10 @@ from components.ui_blocks import (
 from utils.data_agent import fetch_financial_metrics, fetch_trend_data, fetch_news, fetch_fmp, build_context_for_llm, fetch_sidebar_market_data
 from utils.ai_agent import get_insights, get_judge_scores, run_fact_check_agent, resolve_ticker, MAX_FACT_CHECK_RETRIES, get_action_insight, _stream_ollama, robust_tag_parser
 
-load_dotenv()
+# ── API Clients ──
+SB_URL = os.getenv("SUPABASE_URL")
+SB_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SB_URL, SB_KEY) if SB_URL and SB_KEY else None
 
 # =====================================================================
 #  MASTER THEME & UI TOKENS
