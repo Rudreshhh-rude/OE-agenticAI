@@ -1238,11 +1238,15 @@ Then, you MUST provide the structured report inside <report_json> tags."""
 
         user_prompt = f"Generate research for {ticker}.\nCONTEXT:\n{context}"
         
-        stream = _stream_ollama(user_prompt, system_instruction)
+        from utils.ai_agent import stream_ai_response
+        stream = stream_ai_response(user_prompt, system_instruction)
         
         if stream:
             for chunk in stream:
-                content = chunk['message']['content']
+                if "error" in chunk:
+                    st.error(f"Streaming Error: {chunk['error']}")
+                    break
+                content = chunk.get('content', '')
                 full_response += content
                 # Extract partial trace for live view
                 trace = robust_tag_parser(full_response, "audit_trace")

@@ -278,6 +278,7 @@ def _stream_ollama(contents, system_instruction=None):
     messages.append({"role": "user", "content": contents})
 
     try:
+        import ollama
         stream = ollama.chat(
             model=model_id,
             messages=messages,
@@ -288,6 +289,49 @@ def _stream_ollama(contents, system_instruction=None):
     except Exception as e:
         print(f"[OLLAMA STREAM ERROR] {e}")
         return None
+
+
+def _stream_groq(contents, system_instruction=None):
+    """Generates a stream of responses from Groq for cloud deployment."""
+    messages = []
+    if system_instruction:
+        messages.append({"role": "system", "content": system_instruction})
+    messages.append({"role": "user", "content": contents})
+
+    try:
+        stream = GROQ_CLIENT.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.15,
+            max_tokens=1500,
+            stream=True
+        )
+        for chunk in stream:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield {"content": content}
+    except Exception as e:
+        print(f"[GROQ STREAM ERROR] {e}")
+        yield {"error": str(e)}
+
+
+def _stream_ollama_normalized(contents, system_instruction=None):
+    """Wraps Ollama stream to match Groq's normalized yielding."""
+    try:
+        stream = _stream_ollama(contents, system_instruction)
+        if stream:
+            for chunk in stream:
+                yield {"content": chunk['message']['content']}
+    except Exception as e:
+        print(f"[OLLAMA NORMALIZED ERROR] {e}")
+
+
+def stream_ai_response(contents, system_instruction=None):
+    """Entry point for live streaming - automatically selects provider."""
+    if GROQ_CLIENT:
+        return _stream_groq(contents, system_instruction)
+    return _stream_ollama_normalized(contents, system_instruction)
+
 
 
 def resolve_ticker(query: str) -> str | None:
