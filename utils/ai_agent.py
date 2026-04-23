@@ -1,4 +1,3 @@
-import ollama
 import json
 import yfinance as yf
 from tavily import TavilyClient
@@ -54,6 +53,7 @@ def _get_available_ollama_models() -> list[str]:
         return _AVAILABLE_MODELS_CACHE
 
     try:
+        import ollama
         listing = ollama.list()
         models = listing.get("models", []) if isinstance(listing, dict) else []
         installed = []
@@ -117,6 +117,14 @@ def _call_groq(contents: str, config: dict = None) -> object:
 
 def _call_ollama(contents, config=None, system_instruction=None):
     """Resilient Ollama wrapper with retry + model fallback."""
+    try:
+        import ollama as _ollama_lib
+    except ImportError:
+        raise Exception(
+            "Ollama is not installed and no Groq API key is configured. "
+            "Please set the GROQ_API_KEY environment variable to use the cloud LLM provider."
+        )
+
     cfg_kwargs = config or {}
     sys_inst = cfg_kwargs.get("system_instruction") or system_instruction
     
@@ -155,11 +163,17 @@ def _call_ollama(contents, config=None, system_instruction=None):
                 if format_opt:
                     kwargs["format"] = format_opt
                     
-                response = ollama.chat(**kwargs)
+                response = _ollama_lib.chat(**kwargs)
                 return LLMResponse(response['message']['content'])
             except Exception as e:
                 err_str = str(e)
                 print(f"[OLLAMA] {model_id} Error (attempt {attempt}/{MAX_API_RETRIES}): {err_str}")
+                # If Ollama server is not reachable, fail fast with a helpful message.
+                if any(kw in err_str.lower() for kw in ("connection refused", "connect call failed", "cannot connect")):
+                    raise Exception(
+                        "Ollama is not running and no Groq API key is configured. "
+                        "Please set the GROQ_API_KEY environment variable to use the cloud LLM provider."
+                    )
                 # If the model isn't installed, don't waste retries on it.
                 if "not found" in err_str.lower() and "model" in err_str.lower():
                     break
@@ -278,8 +292,8 @@ def _stream_ollama(contents, system_instruction=None):
     messages.append({"role": "user", "content": contents})
 
     try:
-        import ollama
-        stream = ollama.chat(
+        import ollama as _ollama_lib
+        stream = _ollama_lib.chat(
             model=model_id,
             messages=messages,
             stream=True,
@@ -450,16 +464,17 @@ def resolve_ticker(query: str) -> str | None:
             f"Output ONLY the ticker (e.g., AAPL, TATAMOTORS.NS, TSLA). No other text."
         )
 
-        print(f"[STEP 1: TICKER RESOLUTION] Extracting ticker via local LLM...")
+        print(f"[STEP 1: TICKER RESOLUTION] Extracting ticker via LLM...")
         try:
-            model_res = _call_ollama(
+            call_fn = _call_groq if GROQ_CLIENT else _call_ollama
+            model_res = call_fn(
                 contents=prompt,
                 config={"temperature": 0.0},
             )
             ticker_raw = model_res.text.strip().upper()
             ticker_clean = ticker_raw.split()[0] if ticker_raw.split() else None
         except Exception as gemini_err:
-            print(f"[STEP 1: TICKER RESOLUTION] Local LLM extraction failed: {gemini_err}")
+            print(f"[STEP 1: TICKER RESOLUTION] LLM extraction failed: {gemini_err}")
             print(f"[STEP 1: TICKER RESOLUTION] Attempting heuristic extraction from search results...")
             # Heuristic: Find things in parentheses or after a colon like (NASDAQ: AAPL)
             match = re.search(r'\(?([A-Z]+):\s*([A-Z]+)\)?', combined)
@@ -929,7 +944,8 @@ CONTEXT:
 REPORT:
 {report_html}"""
     try:
-        res = _call_ollama(
+        call_fn = _call_groq if GROQ_CLIENT else _call_ollama
+        res = call_fn(
             contents=prompt,
             config={
                 "system_instruction": system_instruction,
