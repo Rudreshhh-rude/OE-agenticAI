@@ -944,7 +944,7 @@ def open_action_modal(action_name, ticker, context_data):
     if cached:
         st.markdown(cached, unsafe_allow_html=True)
     else:
-        with st.spinner("Generating report (local LLM)..."):
+        with st.spinner("Generating report (Institutional AI)..."):
             result = get_action_insight(action_name, ticker, context_data)
             # Cache only verified PASS outputs (avoid caching "Verified Mode: Limited")
             if "✅ Verified Facts" in result:
@@ -974,7 +974,7 @@ if st.session_state.page == "hero":
     # -- Announcement Bar --
     st.markdown("""
     <div class="announce-bar">
-        Glass-Box Architecture: Zero-hallucination financial analysis powered by a local LLM
+        Glass-Box Architecture: Zero-hallucination financial analysis powered by a Institutional AI
         <a href="#">Learn More ></a>
     </div>
     """, unsafe_allow_html=True)
