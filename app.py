@@ -9,6 +9,7 @@ import hashlib
 import concurrent.futures
 import plotly.graph_objects as go
 import yfinance as yf
+import pandas as pd
 from supabase import create_client, Client
 
 load_dotenv()
