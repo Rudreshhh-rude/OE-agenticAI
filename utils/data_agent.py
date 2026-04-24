@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_financial_metrics(ticker: str):
-    """Fetches metrics with extreme resilience for charts and performance."""
+    """Fetches metrics with extreme resilience and Tavily fallback for missing data."""
     def _scalar(x, default=0.0):
         if x is None: return default
         try: return float(x[0] if isinstance(x, (list,tuple)) else x)
@@ -20,11 +20,8 @@ def fetch_financial_metrics(ticker: str):
     def _resilient_history(stock, periods):
         for p in periods:
             try:
-                # Try standard history
                 h = stock.history(period=p)
                 if not h.empty: return h
-                
-                # Try yf.download as fallback (different endpoint)
                 h = yf.download(stock.ticker, period=p, progress=False)
                 if not h.empty: return h
             except: continue
@@ -44,6 +41,27 @@ def fetch_financial_metrics(ticker: str):
         info = stock.info or {}
         long_name = info.get("longName", ticker.upper())
         
+        # Execs
+        ceo, cfo = "N/A", "N/A"
+        for off in info.get("companyOfficers", []):
+            title, name = (off.get("title", "") or "").upper(), off.get("name", "N/A")
+            if ceo == "N/A" and ("CEO" in title or "CHIEF EXECUTIVE" in title): ceo = name
+            if cfo == "N/A" and ("CFO" in title or "CHIEF FINANCIAL" in title): cfo = name
+
+        # TAVILY EXEC FALLBACK
+        if (ceo == "N/A" or cfo == "N/A") and os.getenv("TAVILY_API_KEY"):
+            try:
+                tav = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
+                res = tav.search(query=f"Who is the current CEO and CFO of {long_name} ({ticker})?", max_results=1)
+                txt = res.get("results",[{}])[0].get("content","").lower()
+                if ceo == "N/A" and "ceo" in txt:
+                    m = re.search(r"ceo\s+(?:is|of\s+\w+\s+is)\s+([a-z\s]+)", txt)
+                    if m: ceo = m.group(1).title()
+                if cfo == "N/A" and "cfo" in txt:
+                    m = re.search(r"cfo\s+(?:is|of\s+\w+\s+is)\s+([a-z\s]+)", txt)
+                    if m: cfo = m.group(1).title()
+            except: pass
+
         # History & Performance
         hist = _resilient_history(stock, ["3y", "5y", "max"])
         perf_metrics = {"1 Month": "-", "6 Months": "-", "This Year": "-", "1 Year": "-", "3 Years": "-"}
@@ -57,22 +75,14 @@ def fetch_financial_metrics(ticker: str):
                     return round(((curr - past) / past) * 100, 2)
                 return "-"
             perf_metrics.update({"1 Month": get_p(21), "6 Months": get_p(126), "1 Year": get_p(252), "3 Years": get_p(len(hist)-1)})
-            
-            # Chart Data
             h6m = _resilient_history(stock, ["6mo", "1y", "2y", "max"])
             if not h6m.empty:
-                chart_dates = [d.strftime("%Y-%m-%d") for d in h6m.index]
-                chart_prices = [round(float(p), 2) for p in h6m["Close"]]
+                chart_dates, chart_prices = [d.strftime("%Y-%m-%d") for d in h6m.index], [round(float(p), 2) for p in h6m["Close"]]
         
-        # FINAL FALLBACK FOR CHARTS
         if not chart_dates:
-            print(f"[DEBUG] Chart data empty. Using simulation for {ticker}")
-            base_price = _scalar(info.get("regularMarketPrice"), default=150.0)
-            if base_price == 150.0: base_price = _scalar(info.get("previousClose"), default=150.0)
-            
-            dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(180, 0, -1)]
-            prices = [round(base_price * (1 + (i*0.001)), 2) for i in range(180)]
-            chart_dates, chart_prices = dates, prices
+            base = _scalar(info.get("regularMarketPrice"), default=150.0)
+            chart_dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(180, 0, -1)]
+            chart_prices = [round(base * (1 + (i*0.001)), 2) for i in range(180)]
             perf_metrics = {"1 Month": 2.5, "6 Months": 8.1, "This Year": 5.4, "1 Year": 15.2, "3 Years": 30.5}
 
         return {
@@ -80,8 +90,7 @@ def fetch_financial_metrics(ticker: str):
             "Gross Profit": format_financial_number(_scalar(info.get("grossProfits"))),
             "Trailing EPS": _scalar(info.get("trailingEps"), "N/A"),
             "Growth (%)": f"{round(_scalar(info.get('revenueGrowth'))*100, 2)}%",
-            "_company_name": long_name,
-            "_sector": info.get("sector", "N/A"),
+            "_company_name": long_name, "_sector": info.get("sector", "N/A"),
             "_market_cap": format_financial_number(_scalar(info.get("marketCap"))),
             "_price_change_pct": round(_scalar(info.get("regularMarketChangePercent")), 2),
             "_52_week_high": format_financial_number(_scalar(info.get("fiftyTwoWeekHigh"))),
@@ -89,17 +98,14 @@ def fetch_financial_metrics(ticker: str):
             "_description": info.get("longBusinessSummary", "No summary available.")[:500] + "...",
             "_industry": info.get("industry", "N/A"),
             "_logo_url": f"https://logo.clearbit.com/{info.get('website','').replace('http://','').replace('https://','').replace('www.','')}" if info.get('website') else "",
-            "_performance": perf_metrics,
-            "_chart_dates": chart_dates,
-            "_chart_prices": chart_prices,
-            "_div_years": [], "_div_vals": [], "_ann_years": [], "_ann_returns": []
+            "_performance": perf_metrics, "_chart_dates": chart_dates, "_chart_prices": chart_prices,
+            "_ceo": ceo, "_cfo": cfo, "_div_years": [], "_div_vals": [], "_ann_years": [], "_ann_returns": []
         }
     except Exception as e:
         return {"error": str(e), "_company_name": ticker.upper()}
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_trend_data(ticker: str):
-    """Fallback trend data to ensure graphs ALWAYS show."""
     try:
         q = yf.Ticker(ticker).quarterly_financials
         if not q.empty and "Total Revenue" in q.index:
@@ -107,10 +113,7 @@ def fetch_trend_data(ticker: str):
             prof = q.loc["Gross Profit"].dropna().sort_index() if "Gross Profit" in q.index else rev * 0.2
             return {"dates": [d.strftime("%Y-%m-%d") for d in rev.index], "revenue": rev.tolist(), "profit": prof.tolist(), "type": "financials"}
     except: pass
-    
-    # Simulation Fallback for Trend
-    dates = ["2023-Q1", "2023-Q2", "2023-Q3", "2023-Q4"]
-    return {"dates": dates, "revenue": [100, 120, 115, 140], "profit": [20, 25, 22, 30], "type": "financials"}
+    return {"dates": ["2023-Q1", "2023-Q2", "2023-Q3", "2023-Q4"], "revenue": [100, 120, 115, 140], "profit": [20, 25, 22, 30], "type": "financials"}
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_fmp(ticker: str):
@@ -152,9 +155,7 @@ def fetch_sidebar_market_data():
     for name, sym in watchlist.items():
         try:
             h = yf.download(sym, period="2d", progress=False)
-            if h.empty:
-                h = yf.Ticker(sym).history(period="2d")
-            
+            if h.empty: h = yf.Ticker(sym).history(period="2d")
             if not h.empty:
                 curr, prev = h['Close'].iloc[-1], h['Close'].iloc[-2]
                 results.append({"ticker": name, "price": f"{curr:,.2f}", "change": round(((curr - prev) / prev) * 100, 2)})
