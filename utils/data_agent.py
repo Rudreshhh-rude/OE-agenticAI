@@ -123,7 +123,8 @@ def fetch_financial_metrics(ticker: str):
                 pass
 
         # Fetch 3-year history for performance metrics
-        hist = stock.history(period="3y")
+        # SWITCH: Use yf.download instead of stock.history as it uses a different endpoint often less rate-limited
+        hist = yf.download(ticker, period="3y", progress=False)
         perf_metrics = {"1 Month": "-", "6 Months": "-", "This Year": "-", "1 Year": "-", "3 Years": "-"}
         if not hist.empty:
             current_idx = len(hist) - 1
@@ -170,8 +171,7 @@ def fetch_financial_metrics(ticker: str):
         chart_dates, chart_prices = [], []
         if not hist.empty:
             # Last 6 months for the area chart
-            # yfinance expects "6mo" (not "6m")
-            h6m = stock.history(period="6mo")
+            h6m = yf.download(ticker, period="6mo", progress=False)
             if not h6m.empty and "Close" in h6m.columns:
                 # Be robust: sometimes the index is not a DatetimeIndex
                 idx = pd.to_datetime(h6m.index, errors="coerce")
