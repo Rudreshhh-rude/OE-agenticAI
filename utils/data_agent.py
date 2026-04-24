@@ -193,7 +193,7 @@ def fetch_news(query: str):
         return res.get("results", [])
     except: return []
 
-def build_context_payload(ticker: str, metrics: dict, trends: dict, news: list) -> str:
+def build_context_for_llm(ticker: str, metrics: dict, trends: dict, news: list) -> str:
     payload = {
         "ticker": ticker,
         "profile": {k: v for k, v in metrics.items() if not k.startswith("_")},
@@ -203,3 +203,27 @@ def build_context_payload(ticker: str, metrics: dict, trends: dict, news: list) 
         "news_summary": [n.get("content", "")[:300] for n in news[:3]]
     }
     return json.dumps(payload, indent=2)
+
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_sidebar_market_data():
+    """Fetches high-level index and commodity prices for the sidebar ticker."""
+    watchlist = {
+        "S&P 500": "^GSPC",
+        "Nasdaq 100": "^IXIC",
+        "Bitcoin": "BTC-USD",
+        "Gold": "GC=F",
+        "Crude Oil": "CL=F",
+        "Treasury 10Y": "^TNX"
+    }
+    results = []
+    for name, sym in watchlist.items():
+        try:
+            s = yf.Ticker(sym)
+            h = s.history(period="2d")
+            if not h.empty:
+                curr = h['Close'].iloc[-1]
+                prev = h['Close'].iloc[-2]
+                chg = ((curr - prev) / prev) * 100
+                results.append({"name": name, "price": f"{curr:,.2f}", "change": round(chg, 2)})
+        except: continue
+    return results
