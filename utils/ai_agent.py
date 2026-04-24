@@ -261,6 +261,9 @@ def format_intelligence_steps(text):
         step = step.strip()
         if not step: continue
         
+        # Safety: Strip any code block artifacts that might have leaked
+        step = step.replace("```python", "").replace("```", "").replace("`", "")
+        
         # Determine icon based on content
         icon = "●"
         if "verified" in step.lower() or "passed" in step.lower(): icon = "✓"
@@ -626,7 +629,9 @@ Only issue HOLD if the data is genuinely neutral or contradictory.
 You must return TWO segments in the following order:
 1. <audit_trace>
    Provide a step-by-step internal reasoning of how you verified the data. 
-   Mention specific entities and numbers you checked.
+   - USE PLAIN TEXT ONLY. 
+   - NEVER OUTPUT MARKDOWN CODE BLOCKS (```python) OR SCRIPTS.
+   - Mention specific entities and numbers you checked.
 2. <report_json>
    Provide the JSON report following the strict schema.
 </report_json>
