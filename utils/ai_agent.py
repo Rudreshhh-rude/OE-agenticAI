@@ -102,7 +102,7 @@ def _call_groq(contents: str, config: dict = None) -> object:
     system_prompt = cfg.get("system_instruction", "You are a professional financial analyst.")
     
     try:
-        model_to_use = cfg.get("model_override", "llama-3.3-70b-versatile")
+        model_to_use = cfg.get("model_override", "llama-3.1-8b-instant")
         response = GROQ_CLIENT.chat.completions.create(
             model=model_to_use,
             messages=[
@@ -309,7 +309,7 @@ def _stream_groq(contents, system_instruction=None):
 
     try:
         stream = GROQ_CLIENT.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=messages,
             temperature=0.15,
             max_tokens=1500,
