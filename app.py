@@ -890,9 +890,8 @@ with st.sidebar:
     
     st.markdown(f"""
     <div style="margin-top: 20px; padding: 12px; background: rgba(16,185,129,0.05); border-radius: 8px; border: 1px solid rgba(16,185,129,0.1);">
-        <div style="color: var(--brandA); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">Active Model</div>
-        <div style="color: var(--text); font-size: 0.85rem; font-weight: 600; margin-top: 4px;">Llama 3.2 (3B)</div>
-        <div style="color: var(--muted); font-size: 0.7rem; margin-top: 2px;">Optimized for speed & accuracy</div>
+        <div style="color: var(--text); font-size: 0.85rem; font-weight: 600; margin-top: 4px;">Llama 3.3 (70B)</div>
+        <div style="color: var(--muted); font-size: 0.7rem; margin-top: 2px;">Institutional-grade reasoning enabled</div>
     </div>
     <div style="margin-top: 20px;">
         <button onclick="window.location.reload();" style="width:100%; height:38px; background:rgba(239,68,68,0.1); color:#EF4444; border:1px solid rgba(239,68,68,0.2); border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">
