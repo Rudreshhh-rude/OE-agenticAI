@@ -159,8 +159,22 @@ def fetch_news(query: str):
         res = TavilyClient(api_key=api_key).search(query=query, max_results=5)
         clean = []
         for r in res.get("results", []):
-            txt = re.sub(r'http\S+|\[.*?\]', '', r.get("content", ""))
-            if len(txt) > 20: clean.append({"title": r.get("title", "Market Update"), "content": txt[:400] + "...", "url": r.get("url", "#")})
+            txt = r.get("content", "")
+            # 1. Remove URLs
+            txt = re.sub(r'http\S+', '', txt)
+            # 2. Remove sequences of symbols like * ( [ {
+            txt = re.sub(r'[\*\(\)\[\]\{\}\+\-\=\|\>\<\/\_]{2,}', ' ', txt)
+            # 3. Keep only readable text (alphanumeric and standard punctuation)
+            txt = re.sub(r'[^a-zA-Z0-9\s\.\,\!\?\'\"]', ' ', txt)
+            # 4. Collapse extra whitespace
+            txt = re.sub(r'\s+', ' ', txt).strip()
+            
+            if len(txt) > 40:
+                clean.append({
+                    "title": r.get("title", "Market Update"),
+                    "content": txt[:350] + "...",
+                    "url": r.get("url", "#")
+                })
         return clean
     except: return []
 
