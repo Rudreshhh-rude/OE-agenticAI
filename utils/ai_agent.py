@@ -100,11 +100,12 @@ def _call_groq(contents: str, config: dict = None) -> object:
     
     cfg = config or {}
     system_prompt = cfg.get("system_instruction", "You are a professional financial analyst.")
-    
-    try:
-        model_to_use = cfg.get("model_override", "llama-3.3-70b-versatile")
-        response = GROQ_CLIENT.chat.completions.create(
-            model=model_to_use,
+    primary_model = cfg.get("model_override", "llama-3.3-70b-versatile")
+    fallback_model = "llama-3.1-8b-instant"
+
+    def do_call(model_name):
+        return GROQ_CLIENT.chat.completions.create(
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": contents}
@@ -113,10 +114,18 @@ def _call_groq(contents: str, config: dict = None) -> object:
             max_tokens=cfg.get("num_predict", 1024),
             top_p=cfg.get("top_p", 0.9),
         )
+
+    try:
+        response = do_call(primary_model)
         return LLMResponse(response.choices[0].message.content)
     except Exception as e:
-        print(f"[GROQ ERROR] {e}")
-        return LLMResponse(f"ERROR: {e}")
+        print(f"[GROQ PRIMARY FAILED] {e}. Trying fallback...")
+        try:
+            response = do_call(fallback_model)
+            return LLMResponse(response.choices[0].message.content)
+        except Exception as e2:
+            print(f"[GROQ FALLBACK FAILED] {e2}")
+            return LLMResponse(f"ERROR: Rate limit hit on all models. Please wait 1 minute.")
 
 
 def _call_ollama(contents, config=None, system_instruction=None):
