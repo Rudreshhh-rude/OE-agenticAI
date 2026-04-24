@@ -1,6 +1,6 @@
 streamlit
 ollama
-yfinance
+yfinance>=0.2.40
 tavily-python
 python-dotenv
 groq

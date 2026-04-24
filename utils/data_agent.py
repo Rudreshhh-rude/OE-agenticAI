@@ -15,10 +15,16 @@ def fetch_financial_metrics(ticker: str):
         stock = yf.Ticker(ticker)
         info = stock.info
         
-        if not info or len(info) < 5:
-            print(f"[ERROR] yFinance returned empty or incomplete data for {ticker}. Info keys: {list(info.keys()) if info else 'None'}")
-            # Fallback to basic profile if possible
-            if not info: info = {}
+        if not info or not isinstance(info, dict):
+            info = {}
+            print(f"[ERROR] yFinance returned empty data for {ticker}")
+            try:
+                fi = stock.fast_info
+                info["longName"] = ticker.upper()
+                info["marketCap"] = getattr(fi, "market_cap", 0)
+                info["regularMarketPrice"] = getattr(fi, "last_price", 0)
+            except:
+                pass
         
         def _scalar(x, default=0.0):
             """Coerce yfinance values to float when they come back as lists/strings."""
