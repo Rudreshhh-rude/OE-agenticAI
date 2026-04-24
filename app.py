@@ -1449,8 +1449,8 @@ Sector <div class="fc-badge">{sector}</div>
     x_dates = metrics.get("_chart_dates", [])
     y_prices = metrics.get("_chart_prices", [])
     
-    if not x_dates or not y_prices:
-        st.warning(f"Historical price data unavailable for {ticker}. Showing recent range if available.")
+    if not x_dates or not y_prices or all(p is None or (isinstance(p, float) and pd.isna(p)) for p in y_prices):
+        st.info("📉 Technical price action chart currently unavailable for this ticker.")
     else:
         fig_price.add_trace(go.Scatter(
             x=x_dates, y=y_prices,
@@ -1465,7 +1465,7 @@ Sector <div class="fc-badge">{sector}</div>
             yaxis=dict(showline=False, gridcolor='#E2E8F0', gridwidth=1, griddash='dash'),
             height=350, font=dict(family="Inter", color="#64748B", size=11)
         )
-        st.plotly_chart(fig_price, width="stretch", config={'displayModeBar': False})
+        st.plotly_chart(fig_price, use_container_width=True, config={'displayModeBar': False})
 
     # 4. Performance Grid
     def _val_cls(val):
@@ -1497,26 +1497,24 @@ Sector <div class="fc-badge">{sector}</div>
     years = metrics.get('_ann_years', [])
     returns = metrics.get('_ann_returns', [])
     if not years:
-        st.info("Long-term annual performance data not available for this ticker.")
-        years, returns = [], []
-    
-    colors = ['#22c55e' if r > 0 else '#ef4444' for r in returns]
-    
-    fig_years = go.Figure()
-    fig_years.add_trace(go.Bar(
-        x=years, y=returns,
-        marker_color=colors,
-        text=[f"+{r}%" if r>0 else f"{r}%" for r in returns],
-        textposition='outside'
-    ))
-    fig_years.update_layout(
-        plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
-        xaxis=dict(showgrid=False, showline=False),
-        yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
-        height=220, font=dict(family="Inter", color="#64748B", size=10),
-        bargap=0.4
-    )
-    st.plotly_chart(fig_years, width="stretch", config={'displayModeBar': False})
+        st.info("📉 Long-term annual performance data currently unavailable for this ticker.")
+    else:
+        colors = ['#22c55e' if r > 0 else '#ef4444' for r in returns]
+        fig_years = go.Figure()
+        fig_years.add_trace(go.Bar(
+            x=years, y=returns,
+            marker_color=colors,
+            text=[f"+{r}%" if r>0 else f"{r}%" for r in returns],
+            textposition='outside'
+        ))
+        fig_years.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
+            xaxis=dict(showgrid=False, showline=False),
+            yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
+            height=220, font=dict(family="Inter", color="#64748B", size=10),
+            bargap=0.4
+        )
+        st.plotly_chart(fig_years, use_container_width=True, config={'displayModeBar': False})
 
     # 6. Dividends (go.Bar all green)
     st.markdown("""
@@ -1528,25 +1526,24 @@ Sector <div class="fc-badge">{sector}</div>
     
     div_years = metrics.get('_div_years', [])
     divs = metrics.get('_div_vals', [])
-    if not div_years or all(v == 0 for v in divs):
-        st.info("No dividend history found or company does not pay dividends.")
-        div_years, divs = [], []
-    
-    fig_divs = go.Figure()
-    fig_divs.add_trace(go.Bar(
-        x=div_years, y=divs,
-        marker_color='#22c55e',
-        text=[f"${d}" for d in divs],
-        textposition='outside'
-    ))
-    fig_divs.update_layout(
-        plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
-        xaxis=dict(showgrid=False, showline=False),
-        yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
-        height=220, font=dict(family="Inter", color="#64748B", size=10),
-        bargap=0.4
-    )
-    st.plotly_chart(fig_divs, width="stretch", config={'displayModeBar': False})
+    if not div_years or all(v == 0 or (isinstance(v, float) and pd.isna(v)) for v in divs):
+        st.info("📉 No dividend history found or company does not pay dividends.")
+    else:
+        fig_divs = go.Figure()
+        fig_divs.add_trace(go.Bar(
+            x=div_years, y=divs,
+            marker_color='#22c55e',
+            text=[f"${d}" for d in divs],
+            textposition='outside'
+        ))
+        fig_divs.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
+            xaxis=dict(showgrid=False, showline=False),
+            yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
+            height=220, font=dict(family="Inter", color="#64748B", size=10),
+            bargap=0.4
+        )
+        st.plotly_chart(fig_divs, use_container_width=True, config={'displayModeBar': False})
 
     st.markdown("<hr style='margin: 40px 0px; border-color: #E2E8F0;'>", unsafe_allow_html=True)
     st.markdown("<div id='bottom-report'></div>", unsafe_allow_html=True) # Anchor for scrolling

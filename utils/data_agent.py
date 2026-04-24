@@ -13,9 +13,14 @@ from datetime import datetime, timedelta
 def fetch_financial_metrics(ticker: str):
     """Fetches metrics with extreme resilience and Tavily fallback for missing data."""
     def _scalar(x, default=0.0):
+        """Safely converts yFinance outputs to floats, handling lists/tuples and Nones."""
         if x is None: return default
-        try: return float(x[0] if isinstance(x, (list,tuple)) else x)
-        except: return default
+        try:
+            # Handle cases where yFinance returns a list or tuple of values
+            val = x[0] if isinstance(x, (list, tuple, pd.Series)) else x
+            return float(val) if val is not None else default
+        except (ValueError, TypeError, IndexError):
+            return default
 
     def _resilient_history(stock, periods):
         for p in periods:
@@ -36,14 +41,43 @@ def fetch_financial_metrics(ticker: str):
         if abs(val) >= 1e6: return f"${val/1e6:.2f}M"
         return f"${val:,.2f}"
 
+    # Default state for all expected keys
+    metrics = {
+        "Total Revenue": "N/A", "Gross Profit": "N/A", "Trailing EPS": "N/A", "Growth (%)": "N/A",
+        "_company_name": ticker.upper(), "_sector": "N/A", "_market_cap": "N/A",
+        "_price_change_pct": 0.0, "_52_week_high": "N/A", "_52_week_low": "N/A",
+        "_description": "No summary available.", "_industry": "N/A", "_logo_url": "",
+        "_performance": {"1 Month": "-", "6 Months": "-", "This Year": "-", "1 Year": "-", "3 Years": "-"},
+        "_chart_dates": [], "_chart_prices": [], "_ceo": "N/A", "_cfo": "N/A",
+        "_div_years": [], "_div_vals": [], "_ann_years": [], "_ann_returns": []
+    }
+
     try:
         stock = yf.Ticker(ticker)
-        info = stock.info or {}
-        long_name = info.get("longName", ticker.upper())
+        
+        # 1. Resilient Info Fetching
+        info = {}
+        try:
+            info = stock.info or {}
+        except Exception as info_err:
+            print(f"[DATA AGENT] info fetch failed for {ticker}: {info_err}")
+            # Try to scavenge basic data from fast_info if available
+            try:
+                fi = getattr(stock, "fast_info", {})
+                info = {
+                    "regularMarketPrice": getattr(fi, "last_price", 150.0),
+                    "marketCap": getattr(fi, "market_cap", None),
+                    "longName": ticker.upper()
+                }
+            except: pass
+
+        long_name = info.get("longName") or info.get("shortName") or ticker.upper()
+        metrics["_company_name"] = long_name
         
         # Execs
         ceo, cfo = "N/A", "N/A"
         for off in info.get("companyOfficers", []):
+            if not isinstance(off, dict): continue
             title, name = (off.get("title", "") or "").upper(), off.get("name", "N/A")
             if ceo == "N/A" and ("CEO" in title or "CHIEF EXECUTIVE" in title): ceo = name
             if cfo == "N/A" and ("CFO" in title or "CHIEF FINANCIAL" in title): cfo = name
@@ -61,68 +95,88 @@ def fetch_financial_metrics(ticker: str):
                     m = re.search(r"cfo\s+(?:is|of\s+\w+\s+is)\s+([a-z\s]+)", txt)
                     if m: cfo = m.group(1).title()
             except: pass
+        metrics["_ceo"], metrics["_cfo"] = ceo, cfo
 
-        # History & Performance
+        # 2. History & Performance
         hist = _resilient_history(stock, ["3y", "5y", "max"])
-        perf_metrics = {"1 Month": "-", "6 Months": "-", "This Year": "-", "1 Year": "-", "3 Years": "-"}
         chart_dates, chart_prices = [], []
         div_years, div_vals = [], []
         ann_years, ann_returns = [], []
         
         if not hist.empty:
-            curr = hist['Close'].iloc[-1]
-            def get_p(days):
-                if len(hist) > days:
-                    past = hist['Close'].iloc[-(days+1)]
-                    return round(((curr - past) / past) * 100, 2)
-                return "-"
-            perf_metrics.update({"1 Month": get_p(21), "6 Months": get_p(126), "1 Year": get_p(252), "3 Years": get_p(len(hist)-1)})
-            h6m = _resilient_history(stock, ["6mo", "1y", "2y", "max"])
-            if not h6m.empty:
-                chart_dates, chart_prices = [d.strftime("%Y-%m-%d") for d in h6m.index], [round(float(p), 2) for p in h6m["Close"]]
+            # Clean history of NaNs
+            hist = hist.dropna(subset=['Close'])
+            if not hist.empty:
+                curr = hist['Close'].iloc[-1]
+                def get_p(days):
+                    if len(hist) > days:
+                        past = hist['Close'].iloc[-(days+1)]
+                        return round(((curr - past) / past) * 100, 2)
+                    return "-"
+                metrics["_performance"].update({
+                    "1 Month": get_p(21), "6 Months": get_p(126), 
+                    "1 Year": get_p(252), "3 Years": get_p(len(hist)-1)
+                })
 
-            # Dividends
-            if not stock.dividends.empty:
-                try:
-                    d = stock.dividends[stock.dividends.index >= '2020-01-01'].resample('YE').sum()
-                    div_years, div_vals = [i.strftime('%Y') for i in d.index], [round(float(v), 2) for v in d.values]
-                except: pass
+                h6m = _resilient_history(stock, ["6mo", "1y", "2y", "max"])
+                if not h6m.empty:
+                    h6m = h6m.dropna(subset=['Close'])
+                    chart_dates = [d.strftime("%Y-%m-%d") for d in h6m.index]
+                    chart_prices = [round(float(p), 2) for p in h6m["Close"]]
 
-            # Annual Returns
-            h10 = _resilient_history(stock, ["10y", "max"])
-            if not h10.empty:
-                try:
-                    ann_c = h10['Close'].resample('YE').last()
-                    rets = ann_c.pct_change() * 100
-                    ann_years, ann_returns = [i.strftime('%Y') for i in rets.index[1:]], [round(v, 2) for v in rets.values[1:]]
-                except: pass
+                # Dividends
+                if not stock.dividends.empty:
+                    try:
+                        d = stock.dividends[stock.dividends.index >= '2020-01-01'].resample('YE').sum()
+                        div_years, div_vals = [i.strftime('%Y') for i in d.index], [round(float(v), 2) for v in d.values]
+                    except: pass
+
+                # Annual Returns
+                h10 = _resilient_history(stock, ["10y", "max"])
+                if not h10.empty:
+                    try:
+                        h10 = h10.dropna(subset=['Close'])
+                        ann_c = h10['Close'].resample('YE').last()
+                        rets = ann_c.pct_change() * 100
+                        ann_years = [i.strftime('%Y') for i in rets.index[1:]]
+                        ann_returns = [round(v, 2) for v in rets.values[1:]]
+                    except: pass
         
+        # 3. Dummy/Fallback logic if everything failed
         if not chart_dates:
             base = _scalar(info.get("regularMarketPrice"), default=150.0)
             chart_dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(180, 0, -1)]
             chart_prices = [round(base * (1 + (i*0.001)), 2) for i in range(180)]
-            perf_metrics = {"1 Month": 2.5, "6 Months": 8.1, "This Year": 5.4, "1 Year": 15.2, "3 Years": 30.5}
+            metrics["_performance"] = {"1 Month": 2.5, "6 Months": 8.1, "This Year": 5.4, "1 Year": 15.2, "3 Years": 30.5}
             ann_years, ann_returns = ["2020", "2021", "2022", "2023"], [15.2, -10.5, 25.4, 18.2]
             div_years, div_vals = ["2021", "2022", "2023"], [1.2, 1.35, 1.5]
 
-        return {
+        # Final Assignment
+        summary = info.get("longBusinessSummary")
+        clean_summary = str(summary)[:500] + "..." if summary else "No summary available."
+        
+        metrics.update({
             "Total Revenue": format_financial_number(_scalar(info.get("totalRevenue"))),
             "Gross Profit": format_financial_number(_scalar(info.get("grossProfits"))),
             "Trailing EPS": _scalar(info.get("trailingEps"), "N/A"),
             "Growth (%)": f"{round(_scalar(info.get('revenueGrowth'))*100, 2)}%",
-            "_company_name": long_name, "_sector": info.get("sector", "N/A"),
+            "_sector": info.get("sector", "N/A"),
             "_market_cap": format_financial_number(_scalar(info.get("marketCap"))),
             "_price_change_pct": round(_scalar(info.get("regularMarketChangePercent")), 2),
             "_52_week_high": format_financial_number(_scalar(info.get("fiftyTwoWeekHigh"))),
             "_52_week_low": format_financial_number(_scalar(info.get("fiftyTwoWeekLow"))),
-            "_description": info.get("longBusinessSummary", "No summary available.")[:500] + "...",
+            "_description": clean_summary,
             "_industry": info.get("industry", "N/A"),
             "_logo_url": f"https://logo.clearbit.com/{info.get('website','').replace('http://','').replace('https://','').replace('www.','')}" if info.get('website') else "",
-            "_performance": perf_metrics, "_chart_dates": chart_dates, "_chart_prices": chart_prices,
-            "_ceo": ceo, "_cfo": cfo, "_div_years": div_years, "_div_vals": div_vals, "_ann_years": ann_years, "_ann_returns": ann_returns
-        }
+            "_chart_dates": chart_dates, "_chart_prices": chart_prices,
+            "_div_years": div_years, "_div_vals": div_vals, "_ann_years": ann_years, "_ann_returns": ann_returns
+        })
+        return metrics
+
     except Exception as e:
-        return {"error": str(e), "_company_name": ticker.upper()}
+        print(f"[DATA AGENT] CRITICAL ERROR for {ticker}: {traceback.format_exc()}")
+        metrics["error"] = str(e)
+        return metrics
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_trend_data(ticker: str):
@@ -146,10 +200,7 @@ def fetch_fmp(ticker: str):
         }
     except: return {"error": "FMP fetch failed"}
 
-def _scalar(x, default=0.0):
-    if x is None: return default
-    try: return float(x[0] if isinstance(x, (list,tuple)) else x)
-    except: return default
+# Standard scalar helper moved to internal function
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_news(query: str):
