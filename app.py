@@ -44,7 +44,7 @@ BRAND_B    = "#059669"
 GLOW_SHADOW = "0 0 20px rgba(16, 185, 129, 0.2)"
 
 # =====================================================================
-#  Finsighter  |  Glass-Box Architecture
+# Finsighter - Stable v2.1.2 (Llama 3.3 Patched)
 # =====================================================================
 
 st.set_page_config(
