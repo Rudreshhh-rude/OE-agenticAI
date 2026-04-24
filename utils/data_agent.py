@@ -116,17 +116,23 @@ def fetch_financial_metrics(ticker: str):
             except:
                 pass
 
-        # Fetch history for performance metrics with retry/backoff logic
-        hist = pd.DataFrame()
-        for p in ["3y", "5y", "max"]:
+    def _resilient_history(stock, periods):
+        for p in periods:
             try:
-                hist = stock.history(period=p)
-                if not hist.empty:
-                    print(f"[DEBUG] Successfully fetched history using period: {p}")
-                    break
-            except Exception as e:
-                print(f"[DEBUG] History fetch failed for period {p}: {e}")
+                h = stock.history(period=p)
+                if not h.empty:
+                    return h
+            except:
                 continue
+        return pd.DataFrame()
+
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        # ... (lines 18-118 are same)
+        # Fetch history for performance metrics
+        hist = _resilient_history(stock, ["3y", "5y", "max"])
 
         perf_metrics = {"1 Month": "-", "6 Months": "-", "This Year": "-", "1 Year": "-", "3 Years": "-"}
         if not hist.empty:
@@ -172,18 +178,15 @@ def fetch_financial_metrics(ticker: str):
 
         # Arrays for plotting
         chart_dates, chart_prices = [], []
-        if not hist.empty:
-            # Last 6 months for the area chart
-            # yfinance expects "6mo" (not "6m")
-            h6m = stock.history(period="6mo")
-            if not h6m.empty and "Close" in h6m.columns:
-                # Be robust: sometimes the index is not a DatetimeIndex
-                idx = pd.to_datetime(h6m.index, errors="coerce")
-                if hasattr(idx, "strftime"):
-                    chart_dates = idx.strftime("%Y-%m-%d").tolist()
-                else:
-                    chart_dates = [str(x) for x in list(h6m.index)]
-                chart_prices = [round(float(p), 2) for p in h6m["Close"].tolist()]
+        # Last 6 months for the area chart
+        h6m = _resilient_history(stock, ["6mo", "1y", "2y"])
+        if not h6m.empty and "Close" in h6m.columns:
+            idx = pd.to_datetime(h6m.index, errors="coerce")
+            if hasattr(idx, "strftime"):
+                chart_dates = idx.strftime("%Y-%m-%d").tolist()
+            else:
+                chart_dates = [str(x) for x in list(h6m.index)]
+            chart_prices = [round(float(p), 2) for p in h6m["Close"].tolist()]
             
         div_series = stock.dividends
         div_years, div_vals = [], []
@@ -193,7 +196,6 @@ def fetch_financial_metrics(ticker: str):
                 div_annual = div_series.resample('YE').sum()
             except:
                 div_annual = div_series.resample('Y').sum()
-            # yfinance/pandas can sometimes yield a DataFrame here; normalize to Series
             if isinstance(div_annual, pd.DataFrame) and not div_annual.empty:
                 div_annual = div_annual.iloc[:, 0]
             div_idx = pd.to_datetime(div_annual.index, errors="coerce")
@@ -201,7 +203,7 @@ def fetch_financial_metrics(ticker: str):
             div_vals = [round(float(v), 2) for v in div_annual.values.tolist()]
             
         ann_years, ann_returns = [], []
-        h10y = stock.history(period="10y")
+        h10y = _resilient_history(stock, ["10y", "max"])
         if not h10y.empty:
             try:
                 annual_close = h10y['Close'].resample('YE').last()
