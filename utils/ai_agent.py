@@ -615,7 +615,12 @@ def get_insights(ticker: str, context: str, feedback: str = None) -> dict:
     print(f"\n[STEP 3: DRAFT GENERATION] Synthesizing research for {ticker}...")
     start = time.time()
 
-    system_instruction = f"""You are a Senior Equity Researcher. Your goal is to produce a high-precision, institutional-grade report.
+    system_instruction = f"""You are a Senior Equity Researcher. Your goal is to produce a high-precision, institutional-grade report. 
+
+### BE DECISIVE
+If the financial data (revenue, margins, price trend) is strongly positive, issue a BUY. 
+If it is strongly negative or crashing, issue a SELL. 
+Only issue HOLD if the data is genuinely neutral or contradictory.
 
 ### OUTPUT FORMAT - MANDATORY
 You must return TWO segments in the following order:
@@ -659,7 +664,7 @@ CONTEXT:
             contents=user_prompt,
             config={
                 "system_instruction": system_instruction,
-                "temperature": 0.15,
+                "temperature": 0.3,
                 "num_predict": 1800,
             },
         )
