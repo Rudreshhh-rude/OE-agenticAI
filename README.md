@@ -2,7 +2,9 @@
 
 A professional-grade financial intelligence dashboard that behaves like an on-demand **equity research analyst** while enforcing a **glass-box / zero-hallucination** policy.
 
----
+---Created by 
+Vaideha Patle 02
+Rudresh Belkar 04
 
 ## 📽️ Project Demonstration (Loom Video)
 
