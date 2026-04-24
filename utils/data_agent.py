@@ -224,6 +224,6 @@ def fetch_sidebar_market_data():
                 curr = h['Close'].iloc[-1]
                 prev = h['Close'].iloc[-2]
                 chg = ((curr - prev) / prev) * 100
-                results.append({"name": name, "price": f"{curr:,.2f}", "change": round(chg, 2)})
+                results.append({"ticker": name, "price": f"{curr:,.2f}", "change": round(chg, 2)})
         except: continue
     return results
