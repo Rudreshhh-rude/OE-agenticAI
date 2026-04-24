@@ -193,13 +193,14 @@ def fetch_news(query: str):
         return res.get("results", [])
     except: return []
 
-def build_context_for_llm(ticker: str, metrics: dict, trends: dict, news: list) -> str:
+def build_context_for_llm(ticker: str, metrics: dict, trends: dict, news: list, fmp: dict) -> str:
     payload = {
         "ticker": ticker,
         "profile": {k: v for k, v in metrics.items() if not k.startswith("_")},
         "description": metrics.get("_description", ""),
         "performance": metrics.get("_performance", {}),
         "trends": trends,
+        "fundamental_metrics": fmp,
         "news_summary": [n.get("content", "")[:300] for n in news[:3]]
     }
     return json.dumps(payload, indent=2)
