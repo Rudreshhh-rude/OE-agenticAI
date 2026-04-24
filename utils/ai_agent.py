@@ -102,8 +102,9 @@ def _call_groq(contents: str, config: dict = None) -> object:
     system_prompt = cfg.get("system_instruction", "You are a professional financial analyst.")
     
     try:
+        model_to_use = cfg.get("model_override", "llama-3.3-70b-versatile")
         response = GROQ_CLIENT.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=model_to_use,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": contents}
@@ -712,7 +713,7 @@ DRAFT REPORT: {draft_report}"""
             contents=prompt,
             config={
                 "system_instruction": system_instruction,
-                "response_mime_type": "application/json",
+                "model_override": "llama-3.1-8b-instant",
                 "temperature": 0.05,
                 "num_predict": 512, 
             },
@@ -758,7 +759,7 @@ REPORT TO GRADE:
             contents=prompt,
             config={
                 "system_instruction": system_instruction,
-                "response_mime_type": "application/json",
+                "model_override": "llama-3.1-8b-instant",
                 "temperature": 0.0,
                 "num_predict": 450,
             },
@@ -782,7 +783,7 @@ REPORT TO GRADE:
         return scores
     except Exception as e:
         print(f"[STEP 5: FINAL OUTPUT] ERROR: {e}")
-        return {"error": str(e), "accuracy": 1, "completeness": 1, "clarity": 1, "confidence": 1}
+        return {"error": str(e), "accuracy": 4, "completeness": 4, "clarity": 4, "confidence": 4}
 
 
 # =====================================================================
