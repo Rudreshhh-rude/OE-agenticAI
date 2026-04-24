@@ -44,8 +44,9 @@ BRAND_B    = "#059669"
 GLOW_SHADOW = "0 0 20px rgba(16, 185, 129, 0.2)"
 
 # =====================================================================
-# Finsighter - Stable v2.1.2 (Llama 3.3 Patched)
+# Finsighter - Stable v2.1.3 (Emergency Startup Patch)
 # =====================================================================
+time.sleep(1) # Small delay for cloud environment stability
 
 st.set_page_config(
     page_title=BRAND_NAME,
