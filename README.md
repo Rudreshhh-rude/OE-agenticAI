@@ -1,21 +1,11 @@
 # Finsighter: Institutional-Grade Agentic Terminal
 
-## 1. Problem Statement
-Retail investors often face a "Black Box" when using AI for financial research—outputs are frequently unverified and prone to hallucinations. **Finsighter** solves this by providing an **Agentic Research Terminal** that enforces a strict **Glass-Box policy**. It ensures every financial claim is cross-referenced against raw data providers (yFinance/Tavily), providing institutional-grade transparency for high-stakes decision making.
+A professional-grade financial intelligence dashboard that behaves like an on-demand **equity research analyst** while enforcing a **glass-box / zero-hallucination** policy.
 
 ---
 
-## 2. Task Decomposition & Specs
-The agent's workflow is decomposed into five discrete, verifiable tasks:
-- **Task A (Symbol Resolution)**: Inputting a company name and resolving it to a tradable ticker using fuzzy search and search tool fallbacks.
-- **Task B (Context Extraction)**: Fetching real-time market data, technicals, and news headlines into a dense JSON context.
-- **Task C (Synthesis)**: Reasoning through the data using **Llama 3.1 8B** to produce a BUY/HOLD/SELL verdict with an explicit `<audit_trace>`.
-- **Task D (Compliance Audit)**: A secondary agent fact-checks the synthesis against the raw context to ensure 100% numerical accuracy.
-- **Task E (Evaluation)**: An **LLM-as-Judge** assigns a 4D confidence score based on a strict financial rubric.
+## 🏗️ Architecture (Glass-Box workflow)
 
----
-
-## 3. Architecture Diagram
 ```mermaid
 graph TD
     A[User UI - Streamlit] -->|Input: Stock Ticker| B(Agent Controller)
@@ -29,16 +19,16 @@ graph TD
     end
 
     subgraph "Phase 2: Reasoning & Synthesis"
-        F --> G[Synthesis Agent - Llama 3.1]
+        F --> G[Synthesis Agent - Mixtral]
         G -->|Output| H[<audit_trace> Reasoning Chain]
         G -->|Output| I[<report_json> Draft Report]
     end
 
     subgraph "Phase 3: The Audit Gate"
-        F -.-> J[Fact-Check Auditor - Llama 3.1]
+        F -.-> J[Fact-Check Auditor - Mixtral]
         I -.-> J
         J -->|Validation| K{Verified Mode}
-        K -->|PASS| L[Judge Agent - Llama 3.1]
+        K -->|PASS| L[Judge Agent - Mixtral]
         K -->|FAIL| L
     end
 
@@ -57,22 +47,50 @@ graph TD
 
 ---
 
-## 4. Implementation Details
-- **API Connection**: Integrated with **Groq LPU** for high-speed inference.
-- **Tool Integration**: **Tavily Search** is invoked as a primary tool for real-time news retrieval.
-- **LLM-as-Judge**: Implemented a 4-tier rubric (Accuracy, Completeness, Clarity, Confidence).
-- **Deployment**: Live on **Streamlit Cloud** at: [https://5cbcy7wd.streamlit.app/](https://5cbcy7wd.streamlit.app/)
+## 🚀 Key Features
+
+- **Symbol Resolution**: Resolve company names to tickers using yFinance + Tavily fallbacks.
+- **Agentic Synthesis**: Live "Chain-of-Thought" reasoning visible via the Glass-Box feed.
+- **Numerical Audit**: Fact-checking agent cross-references every AI claim against raw data.
+- **Institutional Judge**: 4D scoring rubric (Accuracy, Completeness, Clarity, Confidence).
+- **High-Aesthetic UI**: Premium dark-mode terminal inspired by institutional trading platforms.
 
 ---
 
-## 5. Loom Video (3 Minutes)
-[Click here to watch the project walkthrough](PASTE_YOUR_LOOM_LINK_HERE)
+## 🛠️ Tech Stack
+
+- **Core**: Python 3.11+, Streamlit
+- **Intelligence**: Groq LPU (Mixtral 8x7B)
+- **Search API**: Tavily AI
+- **Financial Data**: yFinance
+- **Database**: Supabase (User Auth)
+- **Deployment**: Streamlit Cloud / Railway
 
 ---
 
-## 6. Tech Stack
-- **AI Models**: Llama 3.1 (8B Instant) via Groq
-- **Framework**: Streamlit (Python)
-- **Data**: yFinance, Tavily AI, Supabase
+## 🗝️ Setup & Configuration
+
+Create a `.env` file in the root directory:
+
+```toml
+GROQ_API_KEY = "your_key"
+TAVILY_API_KEY = "your_key"
+SUPABASE_URL = "your_url"
+SUPABASE_KEY = "your_key"
+FMP_API_KEY = "your_key"
+```
+
+Run the terminal:
+```bash
+streamlit run app.py
+```
+
+---
+
+## 📊 Evaluation Rubrics Compliance
+- **Problem Statement**: Clarity on verifiable financial AI.
+- **Task Decomposition**: Multi-stage agentic pipeline.
+- **LLM-as-Judge**: Verified 4-tier scoring integration.
+- **Deployment**: Live on Streamlit Cloud.
 
 

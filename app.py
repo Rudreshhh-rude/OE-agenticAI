@@ -44,9 +44,8 @@ BRAND_B    = "#059669"
 GLOW_SHADOW = "0 0 20px rgba(16, 185, 129, 0.2)"
 
 # =====================================================================
-# Finsighter - Stable v2.1.3 (Emergency Startup Patch)
+# Finsighter - Stable v2.1.2 (Llama 3.3 Patched)
 # =====================================================================
-time.sleep(1) # Small delay for cloud environment stability
 
 st.set_page_config(
     page_title=BRAND_NAME,
@@ -891,8 +890,8 @@ with st.sidebar:
     
     st.markdown(f"""
     <div style="margin-top: 20px; padding: 12px; background: rgba(16,185,129,0.05); border-radius: 8px; border: 1px solid rgba(16,185,129,0.1);">
-        <div style="color: var(--text); font-size: 0.85rem; font-weight: 600; margin-top: 4px;">Llama 3.1 (8B)</div>
-        <div style="color: var(--muted); font-size: 0.7rem; margin-top: 2px;">Lightning-speed reasoning enabled</div>
+        <div style="color: var(--text); font-size: 0.85rem; font-weight: 600; margin-top: 4px;">Llama 3.3 (70B)</div>
+        <div style="color: var(--muted); font-size: 0.7rem; margin-top: 2px;">Institutional-grade reasoning enabled</div>
     </div>
     <div style="margin-top: 20px;">
         <button onclick="window.location.reload();" style="width:100%; height:38px; background:rgba(239,68,68,0.1); color:#EF4444; border:1px solid rgba(239,68,68,0.2); border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer;">
@@ -1493,56 +1492,61 @@ Sector <div class="fc-badge">{sector}</div>
 """, unsafe_allow_html=True)
 
     # 5. Years Performance (go.Bar with strict coloring)
+    st.markdown("""<div class="fc-section-header"><div class="fc-pill-dark">Years Performance</div></div>""", unsafe_allow_html=True)
+    
     years = metrics.get('_ann_years', [])
     returns = metrics.get('_ann_returns', [])
+    if not years:
+        st.info("Long-term annual performance data not available for this ticker.")
+        years, returns = [], []
     
-    if years:
-        st.markdown("""<div class="fc-section-header"><div class="fc-pill-dark">Years Performance</div></div>""", unsafe_allow_html=True)
-        colors = ['#22c55e' if r > 0 else '#ef4444' for r in returns]
-        
-        fig_years = go.Figure()
-        fig_years.add_trace(go.Bar(
-            x=years, y=returns,
-            marker_color=colors,
-            text=[f"+{r}%" if r>0 else f"{r}%" for r in returns],
-            textposition='outside'
-        ))
-        fig_years.update_layout(
-            plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
-            xaxis=dict(showgrid=False, showline=False),
-            yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
-            height=220, font=dict(family="Inter", color="#64748B", size=10),
-            bargap=0.4
-        )
-        st.plotly_chart(fig_years, width="stretch", config={'displayModeBar': False})
+    colors = ['#22c55e' if r > 0 else '#ef4444' for r in returns]
+    
+    fig_years = go.Figure()
+    fig_years.add_trace(go.Bar(
+        x=years, y=returns,
+        marker_color=colors,
+        text=[f"+{r}%" if r>0 else f"{r}%" for r in returns],
+        textposition='outside'
+    ))
+    fig_years.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
+        xaxis=dict(showgrid=False, showline=False),
+        yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
+        height=220, font=dict(family="Inter", color="#64748B", size=10),
+        bargap=0.4
+    )
+    st.plotly_chart(fig_years, width="stretch", config={'displayModeBar': False})
 
     # 6. Dividends (go.Bar all green)
+    st.markdown("""
+    <div class="fc-section-header">
+        <div class="fc-pill-dark">Dividends</div>
+        <div class="fc-pill-green">&#8679; INCREASING</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     div_years = metrics.get('_div_years', [])
     divs = metrics.get('_div_vals', [])
+    if not div_years or all(v == 0 for v in divs):
+        st.info("No dividend history found or company does not pay dividends.")
+        div_years, divs = [], []
     
-    if div_years and not all(v == 0 for v in divs):
-        st.markdown("""
-        <div class="fc-section-header">
-            <div class="fc-pill-dark">Dividends</div>
-            <div class="fc-pill-green">&#8679; INCREASING</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        fig_divs = go.Figure()
-        fig_divs.add_trace(go.Bar(
-            x=div_years, y=divs,
-            marker_color='#22c55e',
-            text=[f"${d}" for d in divs],
-            textposition='outside'
-        ))
-        fig_divs.update_layout(
-            plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
-            xaxis=dict(showgrid=False, showline=False),
-            yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
-            height=220, font=dict(family="Inter", color="#64748B", size=10),
-            bargap=0.4
-        )
-        st.plotly_chart(fig_divs, width="stretch", config={'displayModeBar': False})
+    fig_divs = go.Figure()
+    fig_divs.add_trace(go.Bar(
+        x=div_years, y=divs,
+        marker_color='#22c55e',
+        text=[f"${d}" for d in divs],
+        textposition='outside'
+    ))
+    fig_divs.update_layout(
+        plot_bgcolor='white', paper_bgcolor='white', margin=dict(l=0, r=0, t=20, b=10),
+        xaxis=dict(showgrid=False, showline=False),
+        yaxis=dict(showgrid=False, showline=False, zeroline=True, zerolinecolor='#E2E8F0', showticklabels=False),
+        height=220, font=dict(family="Inter", color="#64748B", size=10),
+        bargap=0.4
+    )
+    st.plotly_chart(fig_divs, width="stretch", config={'displayModeBar': False})
 
     st.markdown("<hr style='margin: 40px 0px; border-color: #E2E8F0;'>", unsafe_allow_html=True)
     st.markdown("<div id='bottom-report'></div>", unsafe_allow_html=True) # Anchor for scrolling

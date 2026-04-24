@@ -102,7 +102,7 @@ def _call_groq(contents: str, config: dict = None) -> object:
     system_prompt = cfg.get("system_instruction", "You are a professional financial analyst.")
     
     try:
-        model_to_use = cfg.get("model_override", "llama-3.1-8b-instant")
+        model_to_use = cfg.get("model_override", "llama-3.3-70b-versatile")
         response = GROQ_CLIENT.chat.completions.create(
             model=model_to_use,
             messages=[
@@ -261,9 +261,6 @@ def format_intelligence_steps(text):
         step = step.strip()
         if not step: continue
         
-        # Safety: Strip any code block artifacts that might have leaked
-        step = step.replace("```python", "").replace("```", "").replace("`", "")
-        
         # Determine icon based on content
         icon = "●"
         if "verified" in step.lower() or "passed" in step.lower(): icon = "✓"
@@ -312,7 +309,7 @@ def _stream_groq(contents, system_instruction=None):
 
     try:
         stream = GROQ_CLIENT.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=messages,
             temperature=0.15,
             max_tokens=1500,
@@ -629,9 +626,7 @@ Only issue HOLD if the data is genuinely neutral or contradictory.
 You must return TWO segments in the following order:
 1. <audit_trace>
    Provide a step-by-step internal reasoning of how you verified the data. 
-   - USE PLAIN TEXT ONLY. 
-   - NEVER OUTPUT MARKDOWN CODE BLOCKS (```python) OR SCRIPTS.
-   - Mention specific entities and numbers you checked.
+   Mention specific entities and numbers you checked.
 2. <report_json>
    Provide the JSON report following the strict schema.
 </report_json>

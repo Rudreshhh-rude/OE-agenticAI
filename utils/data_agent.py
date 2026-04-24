@@ -15,16 +15,10 @@ def fetch_financial_metrics(ticker: str):
         stock = yf.Ticker(ticker)
         info = stock.info
         
-        if not info or not isinstance(info, dict):
-            info = {}
-            print(f"[ERROR] yFinance returned empty data for {ticker}")
-            try:
-                fi = stock.fast_info
-                info["longName"] = ticker.upper()
-                info["marketCap"] = getattr(fi, "market_cap", 0)
-                info["regularMarketPrice"] = getattr(fi, "last_price", 0)
-            except:
-                pass
+        if not info or len(info) < 5:
+            print(f"[ERROR] yFinance returned empty or incomplete data for {ticker}. Info keys: {list(info.keys()) if info else 'None'}")
+            # Fallback to basic profile if possible
+            if not info: info = {}
         
         def _scalar(x, default=0.0):
             """Coerce yfinance values to float when they come back as lists/strings."""
@@ -122,9 +116,18 @@ def fetch_financial_metrics(ticker: str):
             except:
                 pass
 
-        # Fetch 3-year history for performance metrics
-        # SWITCH: Use yf.download instead of stock.history as it uses a different endpoint often less rate-limited
-        hist = yf.download(ticker, period="3y", progress=False)
+        # Fetch history for performance metrics with retry/backoff logic
+        hist = pd.DataFrame()
+        for p in ["3y", "5y", "max"]:
+            try:
+                hist = stock.history(period=p)
+                if not hist.empty:
+                    print(f"[DEBUG] Successfully fetched history using period: {p}")
+                    break
+            except Exception as e:
+                print(f"[DEBUG] History fetch failed for period {p}: {e}")
+                continue
+
         perf_metrics = {"1 Month": "-", "6 Months": "-", "This Year": "-", "1 Year": "-", "3 Years": "-"}
         if not hist.empty:
             current_idx = len(hist) - 1
@@ -171,7 +174,8 @@ def fetch_financial_metrics(ticker: str):
         chart_dates, chart_prices = [], []
         if not hist.empty:
             # Last 6 months for the area chart
-            h6m = yf.download(ticker, period="6mo", progress=False)
+            # yfinance expects "6mo" (not "6m")
+            h6m = stock.history(period="6mo")
             if not h6m.empty and "Close" in h6m.columns:
                 # Be robust: sometimes the index is not a DatetimeIndex
                 idx = pd.to_datetime(h6m.index, errors="coerce")

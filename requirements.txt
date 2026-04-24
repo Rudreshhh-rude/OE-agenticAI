@@ -1,10 +1,9 @@
 streamlit
 ollama
-yfinance
-pandas
-numpy
+yfinance>=0.2.40
 tavily-python
 python-dotenv
 groq
 supabase
 plotly
+pandas
